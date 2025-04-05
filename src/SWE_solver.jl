@@ -35,7 +35,7 @@ function SWE_solver(cells, edges, T, initial)
     # Loop over time
     p = Progress(Int64(ceil(T*3840)); dt=0.1)
     
-    CFL = 0.25
+    CFL = 0.1
     while t < T
         # Loop over edges
         update_fluxes!(dev, 32)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
@@ -46,7 +46,7 @@ function SWE_solver(cells, edges, T, initial)
         max_dt = minimum(max_dt_array)
 
         dt = min(dt, CFL*max_dt)
-        println("dt : ", dt)
+        #println("dt : ", dt)
         t += dt
         # Loop over cells
         update_values!(dev, 32)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
