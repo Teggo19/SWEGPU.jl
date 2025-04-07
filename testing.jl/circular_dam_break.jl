@@ -24,7 +24,7 @@ viz_height_initial = SWEGPU.visualize_height(initial, cells, edges)
 
 viz(viz_height_initial)
 
-T = 0.01
+T = 0.02
 
 res = SWEGPU.SWE_solver(cells, edges, T, initial)
 
@@ -37,3 +37,8 @@ result_SinFVM = cartesian_to_triangular(result_SinFVM_cartesian)
 viz_res_SinFVM = SWEGPU.visualize_height(result_SinFVM, cells, edges)
 
 viz!(viz_res_SinFVM, color=:green, alpha = 0.7)
+
+SWEGPU.radial_plot(res, cells)
+SWEGPU.radial_plot(result_SinFVM, cells)
+
+SWEGPU.radial_plots([res, result_SinFVM], cells, ["triangular", "SinFVM"])

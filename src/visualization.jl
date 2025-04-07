@@ -1,6 +1,6 @@
 include("structs.jl")
 using Meshes
-#using GLMakie
+using GLMakie
 
 function visualize_edges(edges)
     #figure = Figure(size=(1000, 1000))
@@ -99,4 +99,44 @@ function visualize_water(U, cells::Vector{Cell{Float64}})
     end
 
     return vis_water
+end
+
+function radial_plot(results, cells)
+    center = (0.5, 0.5)
+
+    cell_centres = [cell.centroid for cell in cells]
+
+    distances = [sqrt((cell_centre[1]-center[1])^2 + (cell_centre[2]-center[2])^2) for cell_centre in cell_centres]
+
+    points = Point2f.(distances, results[:, 1])
+    scatter(points)
+end
+
+function radial_plots(results, cells, names)
+    f = Figure()
+    ax1 = Axis(f[1, 1], title="h")
+    ax2 = Axis(f[2, 1], title="hu")
+    ax3 = Axis(f[3, 1], title="hv")
+    
+    center = (0.5, 0.5)
+
+    cell_centres = [cell.centroid for cell in cells]
+
+    distances = [sqrt((cell_centre[1]-center[1])^2 + (cell_centre[2]-center[2])^2) for cell_centre in cell_centres]
+
+    colors = [:red, :blue, :green, :purple, :orange]
+    
+    for i in 1:length(results)
+        points = Point2f.(distances, results[i][:, 1])
+        scatter!(ax1, points, color=colors[i], label=names[i])
+
+        points = Point2f.(distances, results[i][:, 2])
+        scatter!(ax2, points, color=colors[i], label=names[i])
+
+        points = Point2f.(distances, results[i][:, 3])
+        scatter!(ax3, points, color=colors[i], label=names[i])
+
+    end
+    f[2, 2] = Legend(f, ax2, "Plots")
+    f
 end
