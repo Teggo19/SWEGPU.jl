@@ -10,14 +10,14 @@ function F(U)
     return res 
 end
 
-function G(U)
+#= function G(U)
     # TODO: change type to the same as U
     res = Vector{Float32}(undef, 3)
     res[1] = U[3]
     res[2] = U[2]*U[3]/U[1]
     res[3] = U[3]^2/U[1] + 0.5*U[1]^2*g
     return res
-end
+end =#
 
 function compute_eigenvalues_F(U)
     u = U[2]/U[1]
@@ -25,10 +25,10 @@ function compute_eigenvalues_F(U)
     return [u + sqrt(g*U[1]), u - sqrt(g*U[1]), u]
 end
 
-function compute_eigenvalues_G(U)
+#= function compute_eigenvalues_G(U)
     v = U[3]/U[1]
     return [v + sqrt(g*U[1]), v - sqrt(g*U[1]), v]
-end
+end =#
 
 
 function central_upwind_flux_kurganov(U1, U2, flux, compute_eigenvalues)
@@ -46,6 +46,14 @@ function central_upwind_flux_kurganov(U1, U2, flux, compute_eigenvalues)
     return F, max(abs(aplus), abs(aminus))
 end
 
+function rotate_u(U, n)
+    return [U[1], U[2]*n[1] - U[3]*n[2], U[2]*n[2] + U[3]*n[1]]
+end
+
+function rotate_u_back(U, n)
+    return [U[1], U[2]*n[1] + U[3]*n[2], -U[2]*n[2]+U[3]*n[1]]
+end
+
 @kernel function update_fluxes!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters)
     i = @index(Global)
 
@@ -60,25 +68,30 @@ end
     U2 = U[cell2, :]
     n = normal_matrix[i, :]
 
-    fluxF, lambdaF = central_upwind_flux_kurganov(U1, U2, F, compute_eigenvalues_F)
-    fluxG, lambdaG = central_upwind_flux_kurganov(U1, U2, G, compute_eigenvalues_G)
+    U1_rot = rotate_u(U1, n)
+    U2_rot = rotate_u(U2, n)
+
+    flux_rot, lambda = central_upwind_flux_kurganov(U1_rot, U2_rot, F, compute_eigenvalues_F)
+    #fluxG, lambdaG = central_upwind_flux_kurganov(U1, U2, G, compute_eigenvalues_G)
     #println("edge : $i, FluxF : $fluxF, fluxG : $fluxG, n : $n, edge_length : $(edge_lengths[i])")
-    fluxes[i, :] = fluxF.*(n[1]*edge_lengths[i])+fluxG.*(n[2]*edge_lengths[i])
+
+
+
+    fluxes[i, :] = rotate_u_back(flux_rot, n)*edge_lengths[i]
 
     # Get the diameter for each of the cells
     diameter_1 = diameters[cell1]
     # could add check if cell1=cell2
     diameter_2 = diameters[cell2]
 
-    max_lambda = max(lambdaF, lambdaG)
     #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
     #println("max_lambda :", max_lambda)
-    if max_lambda != 0
-        if  diameter_1/max_lambda < max_dt_array[cell1]
-            max_dt_array[cell1] = diameter_1/max_lambda
+    if lambda != 0
+        if  diameter_1/lambda < max_dt_array[cell1]
+            max_dt_array[cell1] = diameter_1/lambda
         end
-        if diameter_2/max_lambda < max_dt_array[cell2]
-            max_dt_array[cell2] = diameter_2/max_lambda
+        if diameter_2/lambda < max_dt_array[cell2]
+            max_dt_array[cell2] = diameter_2/lambda
         end
     end
             
