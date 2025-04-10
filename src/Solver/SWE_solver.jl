@@ -1,7 +1,7 @@
 using KernelAbstractions
 using ProgressMeter
 
-include("structs.jl")
+include("../structs.jl")
 include("FVM.jl")
 
 function SWE_solver(cells, edges, T, initial)
@@ -35,7 +35,7 @@ function SWE_solver(cells, edges, T, initial)
     # Loop over time
     p = Progress(Int64(ceil(T*3840)); dt=0.1)
     
-    CFL = 0.1
+    CFL = 0.25
     while t < T
         # Loop over edges
         update_fluxes!(dev, 32)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)

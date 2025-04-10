@@ -43,9 +43,9 @@ edges, cells = SWEGPU.generate_mesh(vs, fs);
 #viz_bottom, _ = SWEGPU.visualize_cells(cells)
 #viz(viz_bottom, showsegments=true)
 
-u0 = x -> [exp.(-((x[1]-0.5)^2+(x[2]-0.5)^2)/0.0001)+ 1, 0.0, 0.0]
+#u0 = x -> [exp.(-((x[1]-0.5)^2+(x[2]-0.5)^2)/0.0001)+ 1, 0.0, 0.0]
 
-#u0 = x -> [1.0, 0.0, 0.0]
+u0 = x -> [1.0, 0.0, 0.0]
 
 x = SWEGPU.cell_centres(cells)
 

@@ -1,8 +1,11 @@
-include("read_obj.jl")
-include("structs.jl")
+include("../read_obj.jl")
+include("../structs.jl")
 using ProgressMeter
 
 function generate_mesh(pts, faces)
+    #=
+    Generate the edges and cells from points and faces.
+    =#
 
     edges = Vector{Edge{Float64}}()
     cells = Vector{Cell{Float64}}()
