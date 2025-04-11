@@ -26,7 +26,7 @@ struct Cell{spaceType}
         centroid = (pts[1:3, 1]+ pts[1:3, 2]+ pts[1:3, 3])/3
         area = 0.5*abs((pts[1, 1]-pts[1, 3])*(pts[2, 2]-pts[2, 1])-(pts[1, 1]-pts[1, 2])*(pts[2, 3]-pts[2, 1]))
         d = compute_diameter(pts, area)
-        new(edges, centroid, pts, area, d)
+        new(copy(edges), centroid, pts, area, d)
     end
 end
 

@@ -50,7 +50,6 @@ function visualize_height(U, cells, edges)
     for i in 1:n_cells
         cell = cells[i]
         h = U[i, 1]
-
         p1 = (cell.points[1, 1], cell.points[2, 1], h)
         p2 = (cell.points[1, 2], cell.points[2, 2], h)
         p3 = (cell.points[1, 3], cell.points[2, 3], h)
@@ -138,5 +137,5 @@ function radial_plots(results, cells, names)
 
     end
     f[2, 2] = Legend(f, ax2, "Plots")
-    f
+    f 
 end
