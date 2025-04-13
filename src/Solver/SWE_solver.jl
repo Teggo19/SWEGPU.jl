@@ -1,5 +1,6 @@
 using KernelAbstractions
 using ProgressMeter
+using CUDA
 
 include("../structs.jl")
 include("FVM.jl")
@@ -31,7 +32,17 @@ function SWE_solver(cells, edges, T, initial; backend="CPU")
     max_dt_array = ones(Float64, length(cells))
 
     if backend == "CUDA"
-        
+        fluxes = CuArray(fluxes)
+        U = CuArray(U)
+        edge_cell_matrix = CuArray(edge_cell_matrix)
+        cell_edge_matrix = CuArray(edge_cell_matrix)
+        normal_matrix = CuArray(normal_matrix)
+        edge_lengths = CuArray(edge_lengths)
+        max_dt_array = CuArray(max_dt_array)
+        diameters = CuArray(diameters)
+        areas = CuArray(areas)
+
+        dev = get_backend(U)
     
     else
         dev = CPU()
@@ -43,16 +54,19 @@ function SWE_solver(cells, edges, T, initial; backend="CPU")
     CFL = 0.25
     while t < T
         # Loop over edges
-        update_fluxes!(dev, 32)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
+        update_fluxes!(dev, 512)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
 
         dt = T - t
-
-        max_dt = minimum(max_dt_array)
+        if device_string =="CUDA"
+            max_dt = CUDA.minimum(max_dt_array)
+        else
+            max_dt = minimum(max_dt_array)
+        end
         dt = min(dt, CFL*max_dt)
         #println("dt : ", dt)
         t += dt
         # Loop over cells
-        update_values!(dev, 32)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
+        update_values!(dev, 512)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
 
         update!(p, Int64(ceil(t*3840)))
     end
