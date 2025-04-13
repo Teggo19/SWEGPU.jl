@@ -7,16 +7,16 @@ function generate_mesh(pts, faces)
     Generate the edges and cells from points and faces.
     =#
 
-    edges = Vector{Edge{Float64}}()
-    cells = Vector{Cell{Float64}}()
+    edges = Vector{Edge{Float32}}()
+    cells = Vector{Cell{Float32}}()
 
-    non_completed_edges=Vector{Int64}()
+    non_completed_edges=Vector{Int32}()
 
     n_faces = size(faces, 2)
     # Assuming the faces are defined in a counter-clockwise order
     p = Progress(n_faces; dt=0.2)
     for i in 1:n_faces
-        cell_edges = Vector{Int64}()
+        cell_edges = Vector{Int32}()
         face = faces[:,i]
         for j in 1:3
             pt1 = pts[:, face[j]]
@@ -34,13 +34,13 @@ function generate_mesh(pts, faces)
                 end
             end
             if !edge_exists
-                push!(edges, Edge{Float64}(pt1, pt2, i))
+                push!(edges, Edge(pt1, pt2, i))
                 push!(cell_edges, length(edges))
                 push!(non_completed_edges, length(edges))
             end
 
         end
-        push!(cells, Cell{Float64}(cell_edges, hcat(pts[:, face[1]], pts[:, face[2]], pts[:, face[3]])))
+        push!(cells, Cell(cell_edges, hcat(pts[:, face[1]], pts[:, face[2]], pts[:, face[3]])))
         update!(p, i)
     end
 

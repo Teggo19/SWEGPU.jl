@@ -4,9 +4,9 @@ using ProgressMeter
 include("../structs.jl")
 include("FVM.jl")
 
-function SWE_solver(cells, edges, T, initial)
+function SWE_solver(cells, edges, T, initial; backend="CPU")
     # TODO: Dynamic type allocation to allow for Automatic Differentiation
-    dev = CPU()
+    
     # Set initial conditions
     n_edges = length(edges)
     n_cells = length(cells)
@@ -14,9 +14,6 @@ function SWE_solver(cells, edges, T, initial)
     t = 0
 
     U = deepcopy(initial)
-    # h = initial[:, 0]
-    # hu = initial[:, 1]
-    # hv = initial[:, 2]
     
     # Holds information of what cells each edge is connected to
     edge_cell_matrix = make_edge_cell_matrix(edges)
@@ -32,6 +29,14 @@ function SWE_solver(cells, edges, T, initial)
     normal_matrix = make_normal_matrix(edges)
 
     max_dt_array = ones(Float64, length(cells))
+
+    if backend == "CUDA"
+        
+    
+    else
+        dev = CPU()
+    end
+
     # Loop over time
     p = Progress(Int64(ceil(T*3840)); dt=0.1)
     
@@ -39,12 +44,10 @@ function SWE_solver(cells, edges, T, initial)
     while t < T
         # Loop over edges
         update_fluxes!(dev, 32)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
-        
-        #println("fluxes: \n", fluxes)
+
         dt = T - t
 
         max_dt = minimum(max_dt_array)
-
         dt = min(dt, CFL*max_dt)
         #println("dt : ", dt)
         t += dt
