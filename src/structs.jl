@@ -51,7 +51,10 @@ function make_cell_edge_matrix(cells::Vector{Cell{spaceType}}) where {spaceType<
         if length(cell.edges) == 3
             res[i, :] = cell.edges
         else
-            res[i, 1:length(cell.edges)] = cell.edges
+            # throw error
+            error("Cell at index $i does not have 3 edges")
+
+            #res[i, 1:length(cell.edges)] = cell.edges
         end
     end
     return res

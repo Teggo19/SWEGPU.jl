@@ -5,7 +5,7 @@ module SWEGPU
     include("structs.jl")
     include("Mesh/reading.jl")
     include("Mesh/structured.jl")
-    include("visualization.jl")
+    # include("visualization.jl")
     include("Solver/SWE_solver.jl")
-    include("convergence_test.jl")
+    #include("convergence_test.jl")
 end

@@ -1,120 +1,116 @@
 using KernelAbstractions
-g = 9.81f0
+using StaticArrays
 
-function F(U)
-    # TODO: change type to the same as U
-    res = Vector{Float32}(undef, 3)
-    res[1] = U[2]
-    res[2] = U[2]^2/U[1] + 0.5*U[1]^2*g
-    res[3] = U[2]*U[3]/U[1]
-    return res 
+function F(h::T, hu::T, hv::T) where {T<:Real}
+
+    return hu, hu^2/h + 9.81*0.5*h^2, hv#hu*hv/h
 end
 
-#= function G(U)
-    # TODO: change type to the same as U
-    res = Vector{Float32}(undef, 3)
-    res[1] = U[3]
-    res[2] = U[2]*U[3]/U[1]
-    res[3] = U[3]^2/U[1] + 0.5*U[1]^2*g
-    return res
-end =#
 
-function compute_eigenvalues_F(U)
-    u = U[2]/U[1]
+
+function compute_eigenvalues_F(h, hu, hv)
+    u = hu/h
     #println("U : ", U)
-    return [u + sqrt(g*U[1]), u - sqrt(g*U[1]), u]
+    return u + sqrt(9.81*h), u - sqrt(9.81*h) #, u Dropping the last eigenvalue because it is never the largest or smallest one
 end
 
-#= function compute_eigenvalues_G(U)
-    v = U[3]/U[1]
-    return [v + sqrt(g*U[1]), v - sqrt(g*U[1]), v]
-end =#
 
 
-function central_upwind_flux_kurganov(U1, U2, flux, compute_eigenvalues)
+function central_upwind_flux_kurganov(h1, hu1, hv1, h2, hu2, hv2, flux, compute_eigenvalues)
     # This could potentially be G and not F
-    f1 = flux(U1)
-    f2 = flux(U2)
+    hf1, huf1, hvf1 = flux(h1, hu1, hv1)
+    hf2, huf2, hvf2 = flux(h2, hu2, hv2)
 
-    ev1 = compute_eigenvalues(U1)
-    ev2 = compute_eigenvalues(U2)
+    ev1_pos, ev1_neg = compute_eigenvalues(h1, hu1, hv1)
+    ev2_pos, ev2_neg = compute_eigenvalues(h2, hu2, hv2)
 
-    aplus = max(ev1[1], ev2[1], 0.0)
-    aminus = min(ev1[2], ev2[2], 0.0)
+    aplus = max(ev1_pos, ev2_pos, 0.0)
+    aminus = min(ev1_neg, ev2_neg, 0.0)
     #println("aplus : ", aplus, "  aminus : ", aminus)
-    F = (aplus .* f1 - aminus .* f2)./(aplus - aminus) + ((aplus .* aminus) ./ (aplus - aminus)) .* (U2 - U1)
-    return F, max(abs(aplus), abs(aminus))
+    F1 = (aplus * hf1 - aminus * hf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (h2 - h1)
+    F2 = (aplus * huf1 - aminus * huf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (hu2 - hu1)
+    F3 = (aplus * hvf1 - aminus * hvf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (hv2 - hv1)
+    return F1, F2, F3, max(abs(aplus), abs(aminus))
+    #return h1, h1, h1, h1
 end
 
-function rotate_u(U, n)
-    return [U[1], U[2]*n[1] - U[3]*n[2], U[2]*n[2] + U[3]*n[1]]
+function rotate_u(hu, hv, n1, n2)
+    return hu*n1 - hv*n2, hu*n2 + hv*n1
 end
 
-function rotate_u_back(U, n)
-    return [U[1], U[2]*n[1] + U[3]*n[2], -U[2]*n[2]+U[3]*n[1]]
+function rotate_u_back(hu, hv, n1, n2)
+    return hu*n1 + hv*n2, -hu*n2+hv*n1
 end
 
 @kernel function update_fluxes!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters)
     i = @index(Global)
 
     # Checking if the edge is a boundary edge
-    cell1 = edge_cell_matrix[i, 1]
-    if (edge_cell_matrix[i, 2] == 0) 
-        cell2 = edge_cell_matrix[i, 1]
-    else
-        cell2 = edge_cell_matrix[i, 2]
-    end
-    U1 = U[cell1, :]
-    U2 = U[cell2, :]
-    n = normal_matrix[i, :]
-
-    U1_rot = rotate_u(U1, n)
-    U2_rot = rotate_u(U2, n)
-
-    flux_rot, lambda = central_upwind_flux_kurganov(U1_rot, U2_rot, F, compute_eigenvalues_F)
-    #fluxG, lambdaG = central_upwind_flux_kurganov(U1, U2, G, compute_eigenvalues_G)
-    #println("edge : $i, FluxF : $fluxF, fluxG : $fluxG, n : $n, edge_length : $(edge_lengths[i])")
-
-
-
-    fluxes[i, :] = rotate_u_back(flux_rot, n)*edge_lengths[i]
-
-    # Get the diameter for each of the cells
-    diameter_1 = diameters[cell1]
-    # could add check if cell1=cell2
-    diameter_2 = diameters[cell2]
-
-    #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
-    #println("max_lambda :", max_lambda)
-    if lambda != 0
-        if  diameter_1/lambda < max_dt_array[cell1]
-            max_dt_array[cell1] = diameter_1/lambda
+        cell1 = edge_cell_matrix[i, 1]
+        if (edge_cell_matrix[i, 2] == 0) 
+            cell2 = edge_cell_matrix[i, 1]
+        else
+            cell2 = edge_cell_matrix[i, 2]
         end
-        if diameter_2/lambda < max_dt_array[cell2]
-            max_dt_array[cell2] = diameter_2/lambda
+        h1, hu1, hv1 = U[cell1, 1], U[cell1, 2], U[cell1, 3]
+        h2, hu2, hv2 = U[cell2, 1], U[cell2, 2], U[cell2, 3]
+        n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
+
+        hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
+        hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
+
+        f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
+
+        fluxes[i, 1] = f1*edge_lengths[i]
+        f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
+        fluxes[i, 2] = f2*edge_lengths[i]
+        fluxes[i, 3] = f3*edge_lengths[i]
+        
+        
+        # Get the diameter for each of the cells
+        diameter_1 = diameters[cell1]
+        # could add check if cell1=cell2
+        diameter_2 = diameters[cell2]
+
+        #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
+        #println("max_lambda :", max_lambda)
+        if lambda != 0
+            if  diameter_1/lambda < max_dt_array[cell1]
+                max_dt_array[cell1] = diameter_1/lambda
+            end
+            if diameter_2/lambda < max_dt_array[cell2]
+                max_dt_array[cell2] = diameter_2/lambda
+            end
         end
-    end
+    
             
     
 end
 
-@kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt)
+@kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array)
     i = @index(Global)
+        
+    max_dt_array[i] = 1.f0
 
-    edges = cell_edge_matrix[i, :]
-
-    for edge in edges
+    #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
+    
+    for j in 1:3
+        edge = cell_edge_matrix[i, j]
         if edge_cell_matrix[edge, 1] == i
             #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
-            U[i, :] -= dt/cell_areas[i]*fluxes[edge, :]
-        end
-        if !(edge_cell_matrix[edge, 2] == 0)
+            a = dt/cell_areas[i]
+            U[i, 1] -= a*fluxes[edge, 1]
+            U[i, 2] -= a*fluxes[edge, 2]
+            U[i, 3] -= a*fluxes[edge, 3]
             
-            if edge_cell_matrix[edge, 2] == i
-                U[i, :] += dt/cell_areas[i]*fluxes[edge, :]
-            #= else
-                println("Error: Mismanaged edge-cell matrixes") =#
-            end
+        elseif edge_cell_matrix[edge, 2] == i
+            a = dt/cell_areas[i]
+            U[i, 1] += a*fluxes[edge, 1]
+            U[i, 2] += a*fluxes[edge, 2]
+            U[i, 3] += a*fluxes[edge, 3]
+        #= else
+            println("Error: Mismanaged edge-cell matrixes") =#
         end
+        
     end
 end
