@@ -3,7 +3,7 @@ using StaticArrays
 
 function F(h::T, hu::T, hv::T) where {T<:Real}
 
-    return hu, hu^2/h + 9.81*0.5*h^2, hv#hu*hv/h
+    return hu, hu^2/h + 9.81f0*0.5f0*h^2, hu*hv/h
 end
 
 
@@ -11,7 +11,7 @@ end
 function compute_eigenvalues_F(h, hu, hv)
     u = hu/h
     #println("U : ", U)
-    return u + sqrt(9.81*h), u - sqrt(9.81*h) #, u Dropping the last eigenvalue because it is never the largest or smallest one
+    return u + sqrt(9.81f0*h), u - sqrt(9.81f0*h) #, u Dropping the last eigenvalue because it is never the largest or smallest one
 end
 
 
@@ -24,14 +24,13 @@ function central_upwind_flux_kurganov(h1, hu1, hv1, h2, hu2, hv2, flux, compute_
     ev1_pos, ev1_neg = compute_eigenvalues(h1, hu1, hv1)
     ev2_pos, ev2_neg = compute_eigenvalues(h2, hu2, hv2)
 
-    aplus = max(ev1_pos, ev2_pos, 0.0)
-    aminus = min(ev1_neg, ev2_neg, 0.0)
+    aplus = max(ev1_pos, ev2_pos, 0.f0)
+    aminus = min(ev1_neg, ev2_neg, 0.f0)
     #println("aplus : ", aplus, "  aminus : ", aminus)
     F1 = (aplus * hf1 - aminus * hf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (h2 - h1)
     F2 = (aplus * huf1 - aminus * huf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (hu2 - hu1)
     F3 = (aplus * hvf1 - aminus * hvf2)/(aplus - aminus) + ((aplus * aminus) / (aplus - aminus)) * (hv2 - hv1)
     return F1, F2, F3, max(abs(aplus), abs(aminus))
-    #return h1, h1, h1, h1
 end
 
 function rotate_u(hu, hv, n1, n2)
@@ -46,45 +45,42 @@ end
     i = @index(Global)
 
     # Checking if the edge is a boundary edge
-        cell1 = edge_cell_matrix[i, 1]
-        if (edge_cell_matrix[i, 2] == 0) 
-            cell2 = edge_cell_matrix[i, 1]
-        else
-            cell2 = edge_cell_matrix[i, 2]
-        end
-        h1, hu1, hv1 = U[cell1, 1], U[cell1, 2], U[cell1, 3]
-        h2, hu2, hv2 = U[cell2, 1], U[cell2, 2], U[cell2, 3]
-        n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
+    cell1 = edge_cell_matrix[i, 1]
+    if (edge_cell_matrix[i, 2] == 0) 
+        cell2 = edge_cell_matrix[i, 1]
+    else
+        cell2 = edge_cell_matrix[i, 2]
+    end
+    h1, hu1, hv1 = U[cell1, 1], U[cell1, 2], U[cell1, 3]
+    h2, hu2, hv2 = U[cell2, 1], U[cell2, 2], U[cell2, 3]
+    n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
 
-        hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
-        hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
+    hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
+    hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
 
-        f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
-
-        fluxes[i, 1] = f1*edge_lengths[i]
-        f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
-        fluxes[i, 2] = f2*edge_lengths[i]
-        fluxes[i, 3] = f3*edge_lengths[i]
-        
-        
-        # Get the diameter for each of the cells
-        diameter_1 = diameters[cell1]
-        # could add check if cell1=cell2
-        diameter_2 = diameters[cell2]
-
-        #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
-        #println("max_lambda :", max_lambda)
-        if lambda != 0
-            if  diameter_1/lambda < max_dt_array[cell1]
-                max_dt_array[cell1] = diameter_1/lambda
-            end
-            if diameter_2/lambda < max_dt_array[cell2]
-                max_dt_array[cell2] = diameter_2/lambda
-            end
-        end
+    f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
     
-            
+    fluxes[i, 1] = f1*edge_lengths[i]
+    f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
+    fluxes[i, 2] = f2*edge_lengths[i]
+    fluxes[i, 3] = f3*edge_lengths[i]
     
+    
+    # Get the diameter for each of the cells
+    diameter_1 = diameters[cell1]
+    # could add check if cell1=cell2
+    diameter_2 = diameters[cell2]
+
+    #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
+    #println("max_lambda :", max_lambda)
+    if lambda != 0
+        if  diameter_1/lambda < max_dt_array[cell1]
+            max_dt_array[cell1] = diameter_1/lambda
+        end
+        if diameter_2/lambda < max_dt_array[cell2]
+            max_dt_array[cell2] = diameter_2/lambda
+        end
+    end
 end
 
 @kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array)

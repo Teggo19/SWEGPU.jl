@@ -57,6 +57,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU")
         # Loop over edges
         update_fluxes!(dev, 64)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
         KernelAbstractions.synchronize(dev)
+        #println("fluxes : ", fluxes)
         dt = T - t
         if backend =="CUDA"
             max_dt = CUDA.minimum(max_dt_array)
@@ -65,10 +66,12 @@ function SWE_solver(cells, edges, T, initial; backend="CPU")
             max_dt = minimum(max_dt_array)
         end
         dt = min(dt, CFL*max_dt)
+        
         #println("dt : ", dt)
         t += dt
         # Loop over cells
         update_values!(dev, 64)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, ndrange=n_cells)
+        #update_values!(dev, 64)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
         KernelAbstractions.synchronize(dev)
         update!(p, Int64(ceil(t*3840)))
     end

@@ -1,10 +1,10 @@
 using ProgressMeter
 include("reading.jl")
 
-function make_structured_mesh(n_x, n_y)
+function make_structured_mesh(n_x, n_y, spaceType, indType)
     #p = Progress(Int64((n_x+1)*(n_y+1)+ n_x*n_y))
     #mesh = Array{Float64, 3}(undef, n_x+1, n_y+1, 3)
-    points = Array{Float32, 2}(undef, 3, (n_x+1)*(n_y+1))
+    points = Array{spaceType, 2}(undef, 3, (n_x+1)*(n_y+1))
     for i in 1:n_x+1
         for j in 1:n_y+1
             #mesh[i, j, 1] = (i-1)/n_x
@@ -16,7 +16,7 @@ function make_structured_mesh(n_x, n_y)
         end
     end
 
-    faces = Array{Int32, 2}(undef, 3, 2*n_x*n_y)
+    faces = Array{indType, 2}(undef, 3, 2*n_x*n_y)
 
     for j in 1:n_y
         for i in 1:n_x
@@ -33,5 +33,5 @@ function make_structured_mesh(n_x, n_y)
         #update!(p, (n_x+1)*(n_y+1)+ i)
     end
 
-    return generate_mesh(points, faces)
+    return generate_mesh(points, faces, spaceType, indType)
 end

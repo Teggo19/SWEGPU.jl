@@ -2,21 +2,21 @@ include("../read_obj.jl")
 include("../structs.jl")
 using ProgressMeter
 
-function generate_mesh(pts, faces)
+function generate_mesh(pts, faces, spaceType, indType)
     #=
     Generate the edges and cells from points and faces.
     =#
 
-    edges = Vector{Edge{Float32}}()
-    cells = Vector{Cell{Float32}}()
+    edges = Vector{Edge{spaceType}}()
+    cells = Vector{Cell{spaceType}}()
 
-    non_completed_edges=Vector{Int32}()
+    non_completed_edges=Vector{indType}()
 
     n_faces = size(faces, 2)
     # Assuming the faces are defined in a counter-clockwise order
     p = Progress(n_faces; dt=0.2)
     for i in 1:n_faces
-        cell_edges = Vector{Int32}()
+        cell_edges = Vector{indType}()
         face = faces[:,i]
         for j in 1:3
             pt1 = pts[:, face[j]]
