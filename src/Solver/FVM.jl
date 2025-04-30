@@ -41,27 +41,31 @@ function rotate_u_back(hu, hv, n1, n2)
     return hu*n1 + hv*n2, -hu*n2+hv*n1
 end
 
-@kernel function update_fluxes!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters)
+@kernel function update_fluxes!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc)
     i = @index(Global)
 
     # Checking if the edge is a boundary edge
     cell1 = edge_cell_matrix[i, 1]
+    h1, hu1, hv1 = U[cell1, 1], U[cell1, 2], U[cell1, 3]
+
+    n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
+    hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
+    
     if (edge_cell_matrix[i, 2] == 0) 
+        f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
         cell2 = edge_cell_matrix[i, 1]
     else
         cell2 = edge_cell_matrix[i, 2]
+        h2, hu2, hv2 = U[cell2, 1], U[cell2, 2], U[cell2, 3]
+        
+        hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
+
+        f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
+        
     end
-    h1, hu1, hv1 = U[cell1, 1], U[cell1, 2], U[cell1, 3]
-    h2, hu2, hv2 = U[cell2, 1], U[cell2, 2], U[cell2, 3]
-    n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
-
-    hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
-    hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
-
-    f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
-    
-    fluxes[i, 1] = f1*edge_lengths[i]
     f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
+
+    fluxes[i, 1] = f1*edge_lengths[i]
     fluxes[i, 2] = f2*edge_lengths[i]
     fluxes[i, 3] = f3*edge_lengths[i]
     
@@ -71,8 +75,7 @@ end
     # could add check if cell1=cell2
     diameter_2 = diameters[cell2]
 
-    #println("lambdaF : ", lambdaF, "  lambdaG : ", lambdaG)
-    #println("max_lambda :", max_lambda)
+
     if lambda != 0
         if  diameter_1/lambda < max_dt_array[cell1]
             max_dt_array[cell1] = diameter_1/lambda

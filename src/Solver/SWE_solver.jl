@@ -4,8 +4,9 @@ using CUDA
 
 include("../structs.jl")
 include("FVM.jl")
+include("bc.jl")
 
-function SWE_solver(cells, edges, T, initial; backend="CPU")
+function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC)
     # TODO: Dynamic type allocation to allow for Automatic Differentiation
     
     # Set initial conditions
@@ -55,7 +56,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU")
     CFL = 0.25
     while t < T
         # Loop over edges
-        update_fluxes!(dev, 64)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, ndrange=n_edges)
+        update_fluxes!(dev, 64)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, ndrange=n_edges)
         KernelAbstractions.synchronize(dev)
         #println("fluxes : ", fluxes)
         dt = T - t

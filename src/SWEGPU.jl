@@ -8,4 +8,6 @@ module SWEGPU
     include("visualization.jl")
     include("Solver/SWE_solver.jl")
     include("convergence_test.jl")
+    include("Solver/bc.jl")
+    include("dynamic_visualization.jl")
 end
