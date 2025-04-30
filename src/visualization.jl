@@ -31,7 +31,7 @@ function visualize_cells(cells)
 
     for i in 1:n_cells
         cell = cells[i]
-        push!(vis_points, Point(cell.centroid[1], cell.centroid[2], cell.centroid[3]))
+        #push!(vis_points, Point(cell.centroid[1], cell.centroid[2], cell.centroid[3]))
         p1 = (cell.points[1, 1], cell.points[2, 1], cell.points[3, 1])
         p2 = (cell.points[1, 2], cell.points[2, 2], cell.points[3, 2])
         p3 = (cell.points[1, 3], cell.points[2, 3], cell.points[3, 3])
@@ -39,7 +39,7 @@ function visualize_cells(cells)
 
     end
     
-    return vis_cells, vis_points
+    return vis_cells
 end
 
 function visualize_height(U, cells, edges)
@@ -139,3 +139,6 @@ function radial_plots(results, cells, names)
     f[2, 2] = Legend(f, ax2, "Plots")
     f 
 end
+
+
+

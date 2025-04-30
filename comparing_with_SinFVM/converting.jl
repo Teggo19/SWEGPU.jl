@@ -1,4 +1,4 @@
-
+using StaticArrays
 function cartesian_to_triangular(state)
     # Converts n_x times n_y matrix from cartesian grid to a result for a structured 
     # triangular mesh
