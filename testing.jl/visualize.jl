@@ -1,9 +1,9 @@
 import ArchGDAL
-import GLMakie, Images
+import GLMakie
 import GeometryBasics
 import Meshes
 
-include("./src/SWEGPU.jl")
+include("../src/SWEGPU.jl")
 using .SWEGPU
 
 kuba_path = "/home/trygve/Master/Kode/Grids/swimdata/data/kuba"
@@ -31,7 +31,7 @@ function read_obj(path)
     return vertices, faces
 end
 
-obj_path = "/home/trygve/Master/Kode/Grids/simple.obj"
+obj_path = "/home/trygve/Master/Kode/Grids/terrain.obj"
 vs, fs = SWEGPU.read_obj(obj_path)
 size(vs, 2)
 

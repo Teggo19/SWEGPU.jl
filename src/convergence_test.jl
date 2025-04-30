@@ -3,23 +3,24 @@ using GLMakie
 include("Mesh/structured.jl")
 include("Mesh/reading.jl")
 include("Solver/SWE_solver.jl")
+include("Solver/bc.jl")
 
-function convergence_test(N_list, T, initial_function, title)
+function convergence_test(N_list, T, initial_function, title; backend="cpu", bc=neumannBC)
     baseline_n = N_list[end]
 
-    edges, cells = make_structured_mesh(baseline_n, baseline_n)
+    edges, cells = make_structured_mesh(baseline_n, baseline_n, Float32, Int64)
         
     initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
 
-    baseline = SWE_solver(cells, edges, T, initial)
+    baseline = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc)
 
     diffs = zeros(length(N_list)-1)
     for (i, n) in enumerate(N_list[1:end-1])
-        edges, cells = make_structured_mesh(n, n)
+        edges, cells = make_structured_mesh(n, n, Float32, Int64)
         
         initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
 
-        res = SWE_solver(cells, edges, T, initial)
+        res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc)
 
         res_refined = refine_structured_grid(res, n, baseline_n)
 
@@ -32,8 +33,7 @@ function convergence_test(N_list, T, initial_function, title)
     ax1 = Axis(f[1, 1], title=title, xlabel="N", ylabel="L1 error", xscale=log10, yscale=log10)
     lines!(ax1, N_list[1:end-1], diffs, color=:blue, label="L1 error")
     
-
-    f
+    return N_list, baseline_n, diffs, f
 end
 
 
