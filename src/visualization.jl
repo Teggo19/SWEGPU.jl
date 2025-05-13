@@ -140,5 +140,56 @@ function radial_plots(results, cells, names)
     f 
 end
 
+function visualize_reconstruction(U, edges, cells; recon_type=1)
+    n_cells = length(cells)
+    recon_gradients = make_reconstructions(cells, edges, U)
+    vis_recon = []
+
+    for i in 1:n_cells
+        cell = cells[i]
+        h = U[i, recon_type]
+        c = cell.centroid
+        h1 = h + recon_gradients[i, recon_type, 1]*(cell.points[1, 1]-c[1]) + recon_gradients[i, recon_type, 2]*(cell.points[2, 1]-c[2])
+        h2 = h + recon_gradients[i, recon_type, 1]*(cell.points[1, 2]-c[1]) + recon_gradients[i, recon_type, 2]*(cell.points[2, 2]-c[2])
+        h3 = h + recon_gradients[i, recon_type, 1]*(cell.points[1, 3]-c[1]) + recon_gradients[i, recon_type, 2]*(cell.points[2, 3]-c[2])
+
+        p1 = (cell.points[1, 1], cell.points[2, 1], h1)
+        p2 = (cell.points[1, 2], cell.points[2, 2], h2)
+        p3 = (cell.points[1, 3], cell.points[2, 3], h3)
+
+        push!(vis_recon, Triangle(p1, p2, p3))
+    end
+
+    return vis_recon
+end
+
+
+include("Solver/reconstruction.jl")
+function make_reconstructions(cells, edges, initial)
+    spaceType = eltype(cells[1].centroid)
+
+    n_cells = length(cells)
+    
+
+    U = deepcopy(initial)
+    
+    # Holds information of what cells each edge is connected to
+    edge_cell_matrix = make_edge_cell_matrix(edges)
+    centroids = hcat([cell.centroid for cell in cells]...)'
+
+
+    edge_coordinates = make_edge_coordinates_array(edges)
+
+    # Holds information of what edges each cell is connected to
+    cell_edge_matrix = make_cell_edge_matrix(cells)
+    
+
+    recon_gradient = zeros(spaceType, n_cells, 3, 2)
+    
+    dev = CPU()
+
+    update_reconstruction!(dev, 64)(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
+    return recon_gradient
+end
 
 
