@@ -51,6 +51,8 @@ end
     n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
     hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
     
+    # Add reconstruction here
+
     if (edge_cell_matrix[i, 2] == 0) 
         f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
         cell2 = edge_cell_matrix[i, 1]
@@ -65,6 +67,9 @@ end
     end
     f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
 
+    # Should add gradient of the topography here
+
+    # Updating the fluxes
     fluxes[i, 1] = f1*edge_lengths[i]
     fluxes[i, 2] = f2*edge_lengths[i]
     fluxes[i, 3] = f3*edge_lengths[i]
@@ -75,7 +80,7 @@ end
     # could add check if cell1=cell2
     diameter_2 = diameters[cell2]
 
-
+    # Update the max_dt_array according to the CFL condition
     if lambda != 0
         if  diameter_1/lambda < max_dt_array[cell1]
             max_dt_array[cell1] = diameter_1/lambda
@@ -86,11 +91,12 @@ end
     end
 end
 
-@kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array)
+@kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array, update_dt)
     i = @index(Global)
         
-    max_dt_array[i] = 1.f0
-
+    if update_dt
+        max_dt_array[i] = 1.f0
+    end
     #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
     
     for j in 1:3
@@ -112,4 +118,63 @@ end
         end
         
     end
+end
+
+@kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids)
+    i = @index(Global)
+
+    # Checking if the edge is a boundary edge
+    cell1 = edge_cell_matrix[i, 1]
+    edge_coord = 0.5*(edge_coordinates[i, 1, :] + edge_coordinates[i, 2, :]) - centroids[cell1, 1:2]
+    (h1, hu1, hv1) = (U[cell1, 1], U[cell1, 2], U[cell1, 3]) .+ recon_gradient[cell1, :, 1] * edge_coord[1] .+ recon_gradient[cell1, :, 2] * edge_coord[2]
+
+
+    n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
+    hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
+    
+    # Add reconstruction here
+
+    if (edge_cell_matrix[i, 2] == 0) 
+        f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
+        cell2 = edge_cell_matrix[i, 1]
+    else
+        cell2 = edge_cell_matrix[i, 2]
+        (h2, hu2, hv2) = (U[cell2, 1], U[cell2, 2], U[cell2, 3]) .+ recon_gradient[cell2, :, 1] * edge_coord[1] .+ recon_gradient[cell2, :, 2] * edge_coord[2]
+        
+        hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
+
+        f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
+        
+    end
+    f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
+
+    # Should add gradient of the topography here
+
+    # Updating the fluxes
+    fluxes[i, 1] = f1*edge_lengths[i]
+    fluxes[i, 2] = f2*edge_lengths[i]
+    fluxes[i, 3] = f3*edge_lengths[i]
+    
+    
+    # Get the diameter for each of the cells
+    diameter_1 = diameters[cell1]
+    # could add check if cell1=cell2
+    diameter_2 = diameters[cell2]
+
+    # Update the max_dt_array according to the CFL condition
+    if lambda != 0
+        if  diameter_1/lambda < max_dt_array[cell1]
+            max_dt_array[cell1] = diameter_1/lambda
+        end
+        if diameter_2/lambda < max_dt_array[cell2]
+            max_dt_array[cell2] = diameter_2/lambda
+        end
+    end
+end
+
+@kernel function avg_kernel!(val1, val2)
+    i = @index(Global)
+    res = (val1[i] + val2[i])/2
+    val1[i] = res
+    val2[i] = res
 end

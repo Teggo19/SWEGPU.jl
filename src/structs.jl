@@ -90,3 +90,14 @@ function compute_diameter(pts::Matrix{T}, area::T) where {T<:Real}
 
     return 2*area/s
 end
+
+function make_edge_coordinates_array(edges::Vector{Edge{T}}) where {T<:Real}
+    res = zeros(T, length(edges), 2, 2)
+    for (i, edge) in enumerate(edges)
+        res[i, 1, 1] = edge.pt1[1]
+        res[i, 1, 2] = edge.pt1[2]
+        res[i, 2, 1] = edge.pt2[1]
+        res[i, 2, 2] = edge.pt2[2]
+    end
+    return res
+end
