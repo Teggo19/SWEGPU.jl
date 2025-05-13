@@ -1,18 +1,19 @@
 using GLMakie
+using Polynomials
 
 include("Mesh/structured.jl")
 include("Mesh/reading.jl")
 include("Solver/SWE_solver.jl")
 include("Solver/bc.jl")
 
-function convergence_test(N_list, T, initial_function, title; backend="cpu", bc=neumannBC)
+function convergence_test(N_list, T, initial_function, title; backend="cpu", bc=neumannBC, reconstruction=0)
     baseline_n = N_list[end]
 
     edges, cells = make_structured_mesh(baseline_n, baseline_n, Float32, Int64)
         
     initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
 
-    baseline = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc)
+    baseline = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc, reconstruction=reconstruction)
 
     diffs = zeros(length(N_list)-1)
     for (i, n) in enumerate(N_list[1:end-1])
@@ -20,7 +21,7 @@ function convergence_test(N_list, T, initial_function, title; backend="cpu", bc=
         
         initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
 
-        res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc)
+        res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc, reconstruction=reconstruction)
 
         res_refined = refine_structured_grid(res, n, baseline_n)
 
@@ -32,8 +33,15 @@ function convergence_test(N_list, T, initial_function, title; backend="cpu", bc=
 
     ax1 = Axis(f[1, 1], title=title, xlabel="N", ylabel="L1 error", xscale=log10, yscale=log10)
     lines!(ax1, N_list[1:end-1], diffs, color=:blue, label="L1 error")
-    
-    return N_list, baseline_n, diffs, f
+    scatter!(ax1, N_list[1:end-1], diffs, color=:blue, markersize=5)
+    order_of_convergence = fit(log.(N_list[1:end-1]), log.(diffs), 1)
+    # Plot the line of best fit
+    x = range(minimum(N_list[1:end-1]), stop=maximum(N_list[1:end-1]), length=100)
+    y = exp(order_of_convergence[0]) .* x .^ order_of_convergence[1]
+    lines!(ax1, x, y, color=:red, label="Best fit line: y = $(round(order_of_convergence[0], digits=2))N^$(round(order_of_convergence[1], digits=2))")
+    # Add the legend
+    f[1, 2] = Legend(f, ax1, "Plots")
+    return N_list[1:end-1], diffs, f, baseline_n, order_of_convergence[1]
 end
 
 
