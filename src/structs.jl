@@ -1,18 +1,24 @@
-
-
 struct Edge{spaceType<:Real, indType<:Integer} 
     pt1::Vector{spaceType}
     pt2::Vector{spaceType}
     length::spaceType
     normal::Vector{spaceType}
     # Maybe have this int type be variable as well
-    cells::Vector{indType}  # opposite side of normal
+    cells::Vector{indType}  # The first cell is the one that the normal points out of, 
+                            # the second cell is the one that the normal points into (if it exists)
     # need to figure out how to find cell1 and cell2
     function Edge(pt1::Vector{spaceType}, pt2::Vector{spaceType}, cell::indType) where {spaceType<:Real, indType<:Integer}
         diff = pt2 - pt1
         length = sqrt(diff[1]^2+diff[2]^2)
         normal = [diff[2], -diff[1]] ./ (length)
         cells = [cell]
+        new{spaceType, indType}(pt1, pt2, length, normal, cells)
+    end
+    function Edge(pt1::Vector{spaceType}, pt2::Vector{spaceType}, cell1::indType, cell2::indType) where {spaceType<:Real, indType<:Integer}
+        diff = pt2 - pt1
+        length = sqrt(diff[1]^2+diff[2]^2)
+        normal = [diff[2], -diff[1]] ./ (length)
+        cells = [cell1, cell2]
         new{spaceType, indType}(pt1, pt2, length, normal, cells)
     end
 end
@@ -32,72 +38,3 @@ struct Cell{spaceType<:Real, indType<:Integer}
     end
 end
 
-
-function make_edge_cell_matrix(edges::Vector{Edge{spaceType}}) where {spaceType<:Real}
-    
-    res = zeros(eltype(edges[1].cells), length(edges), 2)
-    for (i, edge) in enumerate(edges)
-        res[i, 1] = edge.cells[1]
-        if length(edge.cells) == 2
-            res[i, 2] = edge.cells[2]
-        end
-    end
-    return res
-end
-
-function make_cell_edge_matrix(cells::Vector{Cell{spaceType}}) where {spaceType<:Real}
-    res = zeros(eltype(cells[1].edges), length(cells), 3)
-    for (i, cell) in enumerate(cells)
-        if length(cell.edges) == 3
-            res[i, :] = cell.edges
-        else
-            # throw error
-            error("Cell at index $i does not have 3 edges")
-
-            #res[i, 1:length(cell.edges)] = cell.edges
-        end
-    end
-    return res
-end
-
-function make_normal_matrix(edges::Vector{Edge{T}}) where {T<:Real}
-    res = zeros(T, length(edges), 2)
-    for (i, edge) in enumerate(edges)
-        res[i, :] = edge.normal
-    end
-    return res
-end
-
-
-function cell_centres(cells::Vector{Cell{T}}) where {T<:Real}
-    res = zeros(T, length(cells), 3)
-    for (i, cell) in enumerate(cells)
-        res[i, :] = cell.centroid
-    end
-    return res
-end
-
-function compute_diameter(pts::Matrix{T}, area::T) where {T<:Real}
-    pt1 = pts[1:2, 1]
-    pt2 = pts[1:2, 2]
-    pt3 = pts[1:2, 3]
-
-    l1 = sqrt(sum((pt1-pt2).^2))
-    l2 = sqrt(sum((pt1-pt3).^2))
-    l3 = sqrt(sum((pt2-pt3).^2))
-
-    s=0.5*(l1+l2+l3)
-
-    return 2*area/s
-end
-
-function make_edge_coordinates_array(edges::Vector{Edge{T}}) where {T<:Real}
-    res = zeros(T, length(edges), 2, 2)
-    for (i, edge) in enumerate(edges)
-        res[i, 1, 1] = edge.pt1[1]
-        res[i, 1, 2] = edge.pt1[2]
-        res[i, 2, 1] = edge.pt2[1]
-        res[i, 2, 2] = edge.pt2[2]
-    end
-    return res
-end

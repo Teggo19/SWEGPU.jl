@@ -2,14 +2,15 @@ using KernelAbstractions
 using ProgressMeter
 using CUDA
 
+
 include("../structs.jl")
 include("FVM.jl")
 include("bc.jl")
 include("reconstruction.jl")
 
-function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, reconstruction=0)
+function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, reconstruction=0, return_runtime=false)
     # TODO: Dynamic type allocation to allow for Automatic Differentiation
-    
+    blocksize = 256
     spaceType = eltype(cells[1].centroid)
     indType = eltype(cells[1].edges)
     # Set initial conditions
@@ -48,12 +49,16 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
         U = CuArray(U)
         edge_cell_matrix = CuArray(edge_cell_matrix)
         cell_edge_matrix = CuArray(cell_edge_matrix)
+
         normal_matrix = CuArray(normal_matrix)
         edge_lengths = CuArray(edge_lengths)
+
         max_dt_array = CuArray(max_dt_array)
+        
         diameters = CuArray(diameters)
         areas = CuArray(areas)
         centroids = CuArray(centroids)
+        
         edge_coordinates = CuArray(edge_coordinates)
 
         if reconstruction == 1
@@ -65,22 +70,26 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
         dev = get_backend(U)
     
     else
-        dev = CPU()
+        dev = get_backend(U)
     end
 
     # Loop over time
     p = Progress(Int64(ceil(T*3840)); dt=0.1)
     
     CFL = 0.25
+
+    if return_runtime
+        start_time = time()
+    end
     while t < T
         if reconstruction == 1
-            update_reconstruction!(dev, 64)(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
+            update_reconstruction!(dev, blocksize)(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
             #return recon_gradient
-            update_fluxes_with_reconstruction!(dev, 64)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, ndrange=n_edges)
+            update_fluxes_with_reconstruction!(dev, blocksize)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, ndrange=n_edges)
         
         # Loop over edges
         else
-            update_fluxes!(dev, 64)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, ndrange=n_edges)
+            update_fluxes!(dev, blocksize)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, ndrange=n_edges)
         end
         KernelAbstractions.synchronize(dev)
         #println("fluxes : ", fluxes)
@@ -97,15 +106,17 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
         t += dt
         # Loop over cells
         if reconstruction == 1
-            update_values!(dev, 64)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, false, ndrange=n_cells)
+            update_values_with_recon!(dev, blocksize)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, false, recon_gradient, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
-            update_reconstruction!(dev, 64)(U2, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
+            update_reconstruction!(dev, blocksize)(U2, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
-            update_values!(dev, 64)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, ndrange=n_cells)
+            update_fluxes_with_reconstruction!(dev, blocksize)(fluxes, U2, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, ndrange=n_edges)
             KernelAbstractions.synchronize(dev)
-            avg_kernel!(dev, 64)(U, U2, ndrange=n_cells)
+            update_values_with_recon!(dev, blocksize)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, recon_gradient, ndrange=n_cells)
+            KernelAbstractions.synchronize(dev)
+            avg_kernel!(dev, blocksize)(U, U2, ndrange=n_cells)
         else
-            update_values!(dev, 64)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, ndrange=n_cells)
+            update_values!(dev, blocksize)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, recon_gradient, ndrange=n_cells)
         end
         #update_values!(dev, 64)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
         KernelAbstractions.synchronize(dev)
@@ -116,6 +127,11 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
     finish!(p)
     if backend == "CUDA"
         U = collect(U)
+    end
+    if return_runtime
+        runtime = time() - start_time
+        println("Runtime: $runtime seconds")
+        return U, runtime
     end
     return U
 end

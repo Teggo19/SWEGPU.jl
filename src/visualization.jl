@@ -192,4 +192,24 @@ function make_reconstructions(cells, edges, initial)
     return recon_gradient
 end
 
+function visualize_heatmap(U, cells; min_max = [0, 2])
+    n_cells = length(cells)
 
+    vis_list = []
+    colors = Vector{Float64}()
+
+    for i in 1:n_cells
+        cell = cells[i]
+        p1 = (cell.points[1, 1], cell.points[2, 1])
+        p2 = (cell.points[1, 2], cell.points[2, 2])
+        p3 = (cell.points[1, 3], cell.points[2, 3])
+        # find the color according to the value of U[i, 1]
+        
+        # create a triangle with the color
+        triangle = Triangle(p1, p2, p3)
+        push!(vis_list, triangle)
+        push!(colors, U[i]/min_max[2])
+
+    end
+    return vis_list, colors
+end

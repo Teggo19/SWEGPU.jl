@@ -93,31 +93,92 @@ end
 
 @kernel function update_values!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array, update_dt)
     i = @index(Global)
-        
+    
     if update_dt
         max_dt_array[i] = 1.f0
     end
     #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
     
+    a = dt/cell_areas[i]
+    val1 = U[i, 1]
+    val2 = U[i, 2]
+    val3 = U[i, 3]
     for j in 1:3
         edge = cell_edge_matrix[i, j]
         if edge_cell_matrix[edge, 1] == i
             #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
-            a = dt/cell_areas[i]
-            U[i, 1] -= a*fluxes[edge, 1]
-            U[i, 2] -= a*fluxes[edge, 2]
-            U[i, 3] -= a*fluxes[edge, 3]
+            
+            val1 -= a*fluxes[edge, 1]
+            val2 -= a*fluxes[edge, 2]
+            val3 -= a*fluxes[edge, 3]
             
         elseif edge_cell_matrix[edge, 2] == i
-            a = dt/cell_areas[i]
-            U[i, 1] += a*fluxes[edge, 1]
-            U[i, 2] += a*fluxes[edge, 2]
-            U[i, 3] += a*fluxes[edge, 3]
+            
+            val1 += a*fluxes[edge, 1]
+            val2 += a*fluxes[edge, 2]
+            val3 += a*fluxes[edge, 3]
         #= else
             println("Error: Mismanaged edge-cell matrixes") =#
         end
         
     end
+    U[i, 1] = val1
+    U[i, 2] = val2
+    U[i, 3] = val3
+end
+
+@kernel function update_values_with_recon!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array, update_dt, recon_gradient, normal_matrix, edge_lengths, edge_coordinates, centroids)
+    i = @index(Global)
+    
+    if update_dt
+        max_dt_array[i] = 1.f0
+    end
+    #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
+    
+    a = dt/cell_areas[i]
+    val1 = U[i, 1]
+    val2 = U[i, 2]
+    val3 = U[i, 3]
+
+    h = val1
+    for j in 1:3
+        edge = cell_edge_matrix[i, j]
+        if edge_cell_matrix[edge, 1] == i
+            #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
+            
+            val1 -= a*fluxes[edge, 1]
+            val2 -= a*fluxes[edge, 2]
+            val3 -= a*fluxes[edge, 3]
+            
+        elseif edge_cell_matrix[edge, 2] == i
+            
+            val1 += a*fluxes[edge, 1]
+            val2 += a*fluxes[edge, 2]
+            val3 += a*fluxes[edge, 3]
+        #= else
+            println("Error: Mismanaged edge-cell matrixes") =#
+        end
+
+        # Bottom topography gradient
+        n1, n2 = normal_matrix[edge, 1], normal_matrix[edge, 2]
+        l = edge_lengths[edge]
+
+        h_edgeval = h + recon_gradient[i, 1, 1] * (edge_coordinates[edge, 1] - centroids[i, 1]) + recon_gradient[i, 1, 2] * (edge_coordinates[edge, 2] - centroids[i, 2])
+
+        val2 += a*0.5f0*9.81f0*l*(h_edgeval^2)*n1
+        val3 += a*0.5f0*9.81f0*l*(h_edgeval^2)*n2
+
+
+        
+    end
+    #TODO: Add the topography gradient of each cell in the centroid
+    val2 -= dt*9.81f0*centroids[i, 3]*h
+    val3 -= dt*9.81f0*centroids[i, 4]*h
+
+
+    U[i, 1] = val1
+    U[i, 2] = val2
+    U[i, 3] = val3
 end
 
 @kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids)
@@ -125,30 +186,34 @@ end
 
     # Checking if the edge is a boundary edge
     cell1 = edge_cell_matrix[i, 1]
-    edge_coord = 0.5*(edge_coordinates[i, 1, :] + edge_coordinates[i, 2, :]) - centroids[cell1, 1:2]
-    (h1, hu1, hv1) = (U[cell1, 1], U[cell1, 2], U[cell1, 3]) .+ recon_gradient[cell1, :, 1] * edge_coord[1] .+ recon_gradient[cell1, :, 2] * edge_coord[2]
+    
+    edge_coord = SVector(edge_coordinates[i, 1] - centroids[cell1, 1], edge_coordinates[i, 2] - centroids[cell1, 2])
+    #SVector(0.5*(edge_coordinates[i, 1, 1] + edge_coordinates[i, 2, 1]) - centroids[cell1, 1], 0.5*(edge_coordinates[i, 1, 2] + edge_coordinates[i, 2, 2]) - centroids[cell1, 2])
+    h1 = U[cell1, 1] .+ recon_gradient[cell1, 1, 1] * edge_coord[1] .+ recon_gradient[cell1, 1, 2] * edge_coord[2]
+    hu1 = U[cell1, 2] .+ recon_gradient[cell1, 2, 1] * edge_coord[1] .+ recon_gradient[cell1, 2, 2] * edge_coord[2]
+    hv1 = U[cell1, 3] .+ recon_gradient[cell1, 3, 1] * edge_coord[1] .+ recon_gradient[cell1, 3, 2] * edge_coord[2]
 
 
     n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
     hu1_rot, hv1_rot = rotate_u(hu1, hv1, n1, n2)
-    
-    # Add reconstruction here
 
     if (edge_cell_matrix[i, 2] == 0) 
         f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
         cell2 = edge_cell_matrix[i, 1]
     else
         cell2 = edge_cell_matrix[i, 2]
-        (h2, hu2, hv2) = (U[cell2, 1], U[cell2, 2], U[cell2, 3]) .+ recon_gradient[cell2, :, 1] * edge_coord[1] .+ recon_gradient[cell2, :, 2] * edge_coord[2]
+        h2 = U[cell2, 1] .+ recon_gradient[cell2, 1, 1] * edge_coord[1] .+ recon_gradient[cell2, 1, 2] * edge_coord[2]
+        hu2 = U[cell2, 2] .+ recon_gradient[cell2, 2, 1] * edge_coord[1] .+ recon_gradient[cell2, 2, 2] * edge_coord[2]
+        hv2 = U[cell2, 3] .+ recon_gradient[cell2, 3, 1] * edge_coord[1] .+ recon_gradient[cell2, 3, 2] * edge_coord[2]
+
         
         hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
 
         f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
         
     end
+    
     f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
-
-    # Should add gradient of the topography here
 
     # Updating the fluxes
     fluxes[i, 1] = f1*edge_lengths[i]
@@ -161,6 +226,7 @@ end
     # could add check if cell1=cell2
     diameter_2 = diameters[cell2]
 
+    #TODO: Fix the CFL to the same as in the paper
     # Update the max_dt_array according to the CFL condition
     if lambda != 0
         if  diameter_1/lambda < max_dt_array[cell1]
@@ -170,6 +236,7 @@ end
             max_dt_array[cell2] = diameter_2/lambda
         end
     end
+    
 end
 
 @kernel function avg_kernel!(val1, val2)

@@ -1,31 +1,33 @@
 using KernelAbstractions
+using StaticArrays
 
 @kernel function update_reconstruction!(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates)
     i = @index(Global)
-
-    c = centroids[i, :]
-    u = U[i, :]
-
+    spaceType = eltype(U)
+    c = SVector(centroids[i, 1], centroids[i, 2])
+    u = SVector(U[i, 1], U[i, 2], U[i, 3])
+    
     neighbours = find_neighbours(cell_edge_matrix, edge_cell_matrix, i)
-    if length(neighbours) != 3
+    
+    if neighbours[1] == 0 || neighbours[2] == 0 || neighbours[3] == 0
         # boundary edge
         for j in 1:3
-            recon_gradient[i, j, 1:2] .= [0.0, 0.0]
+            recon_gradient[i, j, 1] = 0.0
+            recon_gradient[i, j, 2] = 0.0
         end
     else
-        u1 = U[neighbours[1], :]
-        u2 = U[neighbours[2], :]
-        u3 = U[neighbours[3], :]
-        c1 = centroids[neighbours[1], :]
-        c2 = centroids[neighbours[2], :]
-        c3 = centroids[neighbours[3], :]
+        u1 = SVector(U[neighbours[1], 1], U[neighbours[1], 2], U[neighbours[1], 3])
+        u2 = SVector(U[neighbours[2], 1], U[neighbours[2], 2], U[neighbours[2], 3])
+        u3 = SVector(U[neighbours[3], 1], U[neighbours[3], 2], U[neighbours[3], 3])
+        c1 = SVector(centroids[neighbours[1], 1], centroids[neighbours[1], 2])
+        c2 = SVector(centroids[neighbours[2], 1], centroids[neighbours[2], 2])
+        c3 = SVector(centroids[neighbours[3], 1], centroids[neighbours[3], 2])
         # Compute the gradients
         
         for j in 1:3
+            
             val = u[j]
-            val1 = u1[j]
-            val2 = u2[j]
-            val3 = u3[j]
+            vals = SVector(u1[j], u2[j], u3[j])
             
             dx1 = c1[1] - c[1]
             dx2 = c2[1] - c[1]
@@ -35,75 +37,86 @@ using KernelAbstractions
             dy2 = c2[2] - c[2]
             dy3 = c3[2] - c[2]
             
-            du1 = val1 - val
-            du2 = val2 - val
-            du3 = val3 - val
+            du1 = vals[1] - val
+            du2 = vals[2] - val
+            du3 = vals[3] - val
             
             # Compute the gradient
-            grad12 = ((du1 * dy2 - du2 * dy1) / (dx1 * dy2 - dx2 * dy1), 
+            grad12 = SVector((du1 * dy2 - du2 * dy1) / (dx1 * dy2 - dx2 * dy1), 
                     (du1 * dx2 - du2 * dx1) / (dy1 * dx2 - dy2 * dx1))
             
-            grad13 = ((du1 * dy3 - du3 * dy1) / (dx1 * dy3 - dx3 * dy1),
+            grad13 = SVector((du1 * dy3 - du3 * dy1) / (dx1 * dy3 - dx3 * dy1),
                     (du1 * dx3 - du3 * dx1) / (dy1 * dx3 - dy3 * dx1))
 
-            grad23 = ((du2 * dy3 - du3 * dy2) / (dx2 * dy3 - dx3 * dy2),
+            grad23 = SVector((du2 * dy3 - du3 * dy2) / (dx2 * dy3 - dx3 * dy2),
                     (du2 * dx3 - du3 * dx2) / (dy2 * dx3 - dy3 * dx2))
+            
+            grads = SMatrix{3, 2}((du1 * dy2 - du2 * dy1)/(dx1 * dy2 - dx2 * dy1), (du1 * dx2 - du2 * dx1) / (dy1 * dx2 - dy2 * dx1),
+                                  (du1 * dy3 - du3 * dy1)/(dx1 * dy3 - dx3 * dy1), (du1 * dx3 - du3 * dx1) / (dy1 * dx3 - dy3 * dx1),
+                                  (du2 * dy3 - du3 * dy2)/(dx2 * dy3 - dx3 * dy2), (du2 * dx3 - du3 * dx2) / (dy2 * dx3 - dy3 * dx2))
+            
+            abs_grads = SVector(sqrt(grads[1, 1]^2 + grads[1, 2]^2), sqrt(grads[2, 1]^2 + grads[2, 2]^2), sqrt(grads[2, 1]^2 + grads[2, 2]^2))
 
-            abs_grad12 = sqrt(grad12[1]^2 + grad12[2]^2)
-            abs_grad13 = sqrt(grad13[1]^2 + grad13[2]^2)
-            abs_grad23 = sqrt(grad23[1]^2 + grad23[2]^2)
+            grad_ind = argmin(abs_grads)
 
-
-            grad_written = false
-            if abs_grad12 <= abs_grad13 && abs_grad12 <= abs_grad23
-                if check_gradient(grad12, val, val3, c, edge_coordinates[cell_edge_matrix[i, 3], 1, :], edge_coordinates[cell_edge_matrix[i, 3], 2, :])
-                    recon_gradient[i, j, 1:2] .= grad12
-                    grad_written = true
-                else
-                    recon_gradient[i, j, 1:2] .= [0.0, 0.0]
+            grad = grads[grad_ind, :]
+            grad_test = true
+            for k in 1:3
+                edge_coord = SVector(edge_coordinates[cell_edge_matrix[i, k], 1], edge_coordinates[cell_edge_matrix[i, k], 2])
+                edge_val = val + grad[1] * (edge_coord[1] - c[1]) + grad[2] * (edge_coord[2] - c[2])
+                if (edge_val > val && edge_val > vals[k]) || (edge_val < val && edge_val < vals[k])
+                    grad_test = false
+                    break
                 end
             end
-            if !grad_written && abs_grad13 <= abs_grad23 && abs_grad13 <= abs_grad12
-                if check_gradient(grad13, val, val2, c, edge_coordinates[cell_edge_matrix[i, 2], 1, :], edge_coordinates[cell_edge_matrix[i, 2], 2, :])
-                    recon_gradient[i, j, 1:2] .= grad13
-                    grad_written = true
-                else
-                    recon_gradient[i, j, 1:2] .= [0.0, 0.0]
-                end
+            if !grad_test
+                grad = SVector(0.0, 0.0)
             end
-            if !grad_written && abs_grad23 <= abs_grad12 && abs_grad23 <= abs_grad13
-                if check_gradient(grad12, val, val1, c, edge_coordinates[cell_edge_matrix[i, 1],1, :], edge_coordinates[cell_edge_matrix[i, 1],2, :])
-                    recon_gradient[i, j, 1:2] .= grad23
-                    grad_written = true
-                else
-                    recon_gradient[i, j, 1:2] .= [0.0, 0.0]
-                end
-            end
+            recon_gradient[i, j, 1] = grad[1]
+            recon_gradient[i, j, 2] = grad[2]
+            
             
         end
         
     end
+    
 end
 
 
 function find_neighbours(cell_edge_matrix, edge_cell_matrix, i)
-    neighbours = zeros(eltype(cell_edge_matrix[1, :]), 0)
+
+    n1 = 0
+    n2 = 0
+    n3 = 0
     for j in 1:3
         edge = cell_edge_matrix[i, j]
         if edge_cell_matrix[edge, 1] == i
             if edge_cell_matrix[edge, 2] != 0
-                push!(neighbours, edge_cell_matrix[edge, 2])
+                if j == 1
+                    n1 = edge_cell_matrix[edge, 2]
+                elseif j == 2
+                    n2 = edge_cell_matrix[edge, 2]
+                elseif j == 3
+                    n3 = edge_cell_matrix[edge, 2]
+                end
             end
         else
-            push!(neighbours, edge_cell_matrix[edge, 1])
+            if j == 1
+                n1 = edge_cell_matrix[edge, 1]
+            elseif j == 2
+                n2 = edge_cell_matrix[edge, 1]
+            elseif j == 3
+                n3 = edge_cell_matrix[edge, 1]
+            end
+
         end
     end
-    return neighbours
+    return SVector(n1, n2, n3)
 end
 
-function check_gradient(gradient, val, val2, c, pt1, pt2)
-    edge_centre = (pt1 + pt2) / 2
-    diff = edge_centre - c[1:2]
+function check_gradient(gradient, val, val2, c_x, c_y, pt1_x, pt1_y, pt2_x, pt2_y)::Bool
+    edge_centre = SVector((pt1_x + pt2_x) / 2, (pt1_y + pt2_y) / 2)
+    diff = SVector(edge_centre[1] - c_x, edge_centre[2] - c_y)
     
     edge_val = val + gradient[1] * diff[1] + gradient[2] * diff[2]
     if edge_val >= val && edge_val <= val2

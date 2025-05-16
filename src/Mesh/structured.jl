@@ -1,9 +1,16 @@
 using ProgressMeter
 include("reading.jl")
+include("save_meshes.jl")
 
 function make_structured_mesh(n_x, n_y, spaceType, indType)
     #p = Progress(Int64((n_x+1)*(n_y+1)+ n_x*n_y))
     #mesh = Array{Float64, 3}(undef, n_x+1, n_y+1, 3)
+    filename = "structs/structured_$(n_x)x$(n_y)_$(spaceType)_$(indType)"
+    if isfile("tmp/$filename.jld")
+        println("Loading mesh from tmp/$filename.jld")
+        return load_structures(filename)
+    end
+
     points = Array{spaceType, 2}(undef, 3, (n_x+1)*(n_y+1))
     for i in 1:n_x+1
         for j in 1:n_y+1
@@ -33,5 +40,8 @@ function make_structured_mesh(n_x, n_y, spaceType, indType)
         #update!(p, (n_x+1)*(n_y+1)+ i)
     end
 
-    return generate_mesh(points, faces, spaceType, indType)
+    edges, cells = generate_mesh(points, faces, spaceType, indType)
+    println("Saving mesh to tmp/$filename.jld")
+    save_structures(cells, edges, filename)
+    return edges, cells
 end
