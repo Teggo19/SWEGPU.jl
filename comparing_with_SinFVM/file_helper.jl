@@ -1,6 +1,6 @@
 using JLD
 function read_from_file(filename; input="res")
-    result = load("tmp/$filename.jld", input)
+    result = load("tmp/SinFVM/$filename.jld", input)
     
     return result
 end

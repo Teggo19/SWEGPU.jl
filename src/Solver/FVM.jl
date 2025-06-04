@@ -79,15 +79,20 @@ end
     diameter_1 = diameters[cell1]
     # could add check if cell1=cell2
     diameter_2 = diameters[cell2]
+    diameter = min(diameter_1, diameter_2)
 
     # Update the max_dt_array according to the CFL condition
     if lambda != 0
+        max_dt_array[i] = diameter/lambda
+        
+        #=
         if  diameter_1/lambda < max_dt_array[cell1]
             max_dt_array[cell1] = diameter_1/lambda
         end
         if diameter_2/lambda < max_dt_array[cell2]
             max_dt_array[cell2] = diameter_2/lambda
         end
+        =#
     end
 end
 
@@ -127,7 +132,7 @@ end
     U[i, 3] = val3
 end
 
-@kernel function update_values_with_recon!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array, update_dt, recon_gradient, normal_matrix, edge_lengths, edge_coordinates, centroids)
+@kernel function update_values_with_recon!(U, fluxes, cell_edge_matrix, edge_cell_matrix, cell_areas, dt, max_dt_array, update_dt, recon_gradient, normal_matrix, edge_lengths, edge_coordinates, centroids, cell_grads)
     i = @index(Global)
     
     if update_dt
@@ -140,48 +145,55 @@ end
     val2 = U[i, 2]
     val3 = U[i, 3]
 
-    h = val1
+    h = U[i, 1]
     for j in 1:3
         edge = cell_edge_matrix[i, j]
+
+        # Bottom topography gradient
+        n1, n2 = normal_matrix[edge, 1], normal_matrix[edge, 2]
+        l = edge_lengths[edge]
+
+        h_edgeval = h + (recon_gradient[i, 1, 1]-cell_grads[i, 1]) * (edge_coordinates[edge, 1] - centroids[i, 1]) + (recon_gradient[i, 1, 2]-cell_grads[i, 2]) * (edge_coordinates[edge, 2] - centroids[i, 2])
+
+        b_diff = edge_coordinates[edge, 3] - centroids[i, 3]
+
         if edge_cell_matrix[edge, 1] == i
             #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
             
             val1 -= a*fluxes[edge, 1]
             val2 -= a*fluxes[edge, 2]
             val3 -= a*fluxes[edge, 3]
+            #println("Before adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3")
+            val2 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
+            val3 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
             
         elseif edge_cell_matrix[edge, 2] == i
             
             val1 += a*fluxes[edge, 1]
             val2 += a*fluxes[edge, 2]
             val3 += a*fluxes[edge, 3]
+            #println("Before adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3")
+            val2 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
+            val3 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
         #= else
             println("Error: Mismanaged edge-cell matrixes") =#
         end
+        #println("After adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3 \n")
+        #println("Cell $i, h: $h, edge: $edge, h_edgeval: $(h_edgeval), length: $l, recon_gradient: $(recon_gradient[i, :, :]), cell_grads: $(cell_grads[i, :]), edge_coord: $(edge_coordinates[edge, :] - centroids[i, :]) \n")
 
-        # Bottom topography gradient
-        n1, n2 = normal_matrix[edge, 1], normal_matrix[edge, 2]
-        l = edge_lengths[edge]
-
-        h_edgeval = h + recon_gradient[i, 1, 1] * (edge_coordinates[edge, 1] - centroids[i, 1]) + recon_gradient[i, 1, 2] * (edge_coordinates[edge, 2] - centroids[i, 2])
-
-        val2 += a*0.5f0*9.81f0*l*(h_edgeval^2)*n1
-        val3 += a*0.5f0*9.81f0*l*(h_edgeval^2)*n2
-
-
+        # Balance terms from the topography gradient
         
     end
     #TODO: Add the topography gradient of each cell in the centroid
-    val2 -= dt*9.81f0*centroids[i, 3]*h
-    val3 -= dt*9.81f0*centroids[i, 4]*h
-
-
+    
+    val2 -= dt*9.81f0*recon_gradient[i, 1, 1]*h
+    val3 -= dt*9.81f0*recon_gradient[i, 1, 2]*h
     U[i, 1] = val1
     U[i, 2] = val2
     U[i, 3] = val3
 end
 
-@kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids)
+@kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, cell_grads)
     i = @index(Global)
 
     # Checking if the edge is a boundary edge
@@ -189,9 +201,9 @@ end
     
     edge_coord = SVector(edge_coordinates[i, 1] - centroids[cell1, 1], edge_coordinates[i, 2] - centroids[cell1, 2])
     #SVector(0.5*(edge_coordinates[i, 1, 1] + edge_coordinates[i, 2, 1]) - centroids[cell1, 1], 0.5*(edge_coordinates[i, 1, 2] + edge_coordinates[i, 2, 2]) - centroids[cell1, 2])
-    h1 = U[cell1, 1] .+ recon_gradient[cell1, 1, 1] * edge_coord[1] .+ recon_gradient[cell1, 1, 2] * edge_coord[2]
-    hu1 = U[cell1, 2] .+ recon_gradient[cell1, 2, 1] * edge_coord[1] .+ recon_gradient[cell1, 2, 2] * edge_coord[2]
-    hv1 = U[cell1, 3] .+ recon_gradient[cell1, 3, 1] * edge_coord[1] .+ recon_gradient[cell1, 3, 2] * edge_coord[2]
+    h1 = U[cell1, 1] + (recon_gradient[cell1, 1, 1] - cell_grads[cell1, 1]) * edge_coord[1] + (recon_gradient[cell1, 1, 2]-cell_grads[cell1, 2]) * edge_coord[2]
+    hu1 = U[cell1, 2] + recon_gradient[cell1, 2, 1] * edge_coord[1] + recon_gradient[cell1, 2, 2] * edge_coord[2]
+    hv1 = U[cell1, 3] + recon_gradient[cell1, 3, 1] * edge_coord[1] + recon_gradient[cell1, 3, 2] * edge_coord[2]
 
 
     n1, n2 = normal_matrix[i, 1], normal_matrix[i, 2]
@@ -200,11 +212,13 @@ end
     if (edge_cell_matrix[i, 2] == 0) 
         f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
         cell2 = edge_cell_matrix[i, 1]
+        edge_coord2 = edge_coord
     else
         cell2 = edge_cell_matrix[i, 2]
-        h2 = U[cell2, 1] .+ recon_gradient[cell2, 1, 1] * edge_coord[1] .+ recon_gradient[cell2, 1, 2] * edge_coord[2]
-        hu2 = U[cell2, 2] .+ recon_gradient[cell2, 2, 1] * edge_coord[1] .+ recon_gradient[cell2, 2, 2] * edge_coord[2]
-        hv2 = U[cell2, 3] .+ recon_gradient[cell2, 3, 1] * edge_coord[1] .+ recon_gradient[cell2, 3, 2] * edge_coord[2]
+        edge_coord2 = SVector(edge_coordinates[i, 1] - centroids[cell2, 1], edge_coordinates[i, 2] - centroids[cell2, 2])
+        h2 = U[cell2, 1] + (recon_gradient[cell2, 1, 1]-cell_grads[cell2, 1]) * edge_coord2[1] + (recon_gradient[cell2, 1, 2]-cell_grads[cell2, 2]) * edge_coord2[2]
+        hu2 = U[cell2, 2] + recon_gradient[cell2, 2, 1] * edge_coord[1] + recon_gradient[cell2, 2, 2] * edge_coord[2]
+        hv2 = U[cell2, 3] + recon_gradient[cell2, 3, 1] * edge_coord[1] + recon_gradient[cell2, 3, 2] * edge_coord[2]
 
         
         hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
@@ -220,28 +234,27 @@ end
     fluxes[i, 2] = f2*edge_lengths[i]
     fluxes[i, 3] = f3*edge_lengths[i]
     
-    
     # Get the diameter for each of the cells
-    diameter_1 = diameters[cell1]
+    #diameter_1 = diameters[cell1]
+    diameter_1 = sqrt(edge_coord[1]^2 + edge_coord[2]^2)
     # could add check if cell1=cell2
-    diameter_2 = diameters[cell2]
+    #diameter_2 = diameters[cell2]
+    diameter_2 = sqrt(edge_coord2[1]^2 + edge_coord2[2]^2)
+    diameter = min(diameter_1, diameter_2)
 
     #TODO: Fix the CFL to the same as in the paper
     # Update the max_dt_array according to the CFL condition
     if lambda != 0
-        if  diameter_1/lambda < max_dt_array[cell1]
-            max_dt_array[cell1] = diameter_1/lambda
-        end
-        if diameter_2/lambda < max_dt_array[cell2]
-            max_dt_array[cell2] = diameter_2/lambda
-        end
+        max_dt_array[i] = diameter/lambda
     end
     
 end
 
 @kernel function avg_kernel!(val1, val2)
     i = @index(Global)
-    res = (val1[i] + val2[i])/2
-    val1[i] = res
-    val2[i] = res
+    for j in 1:3
+        res = (val1[i, j] + val2[i, j])/2
+        val1[i, j] = res
+        val2[i, j] = res
+    end
 end

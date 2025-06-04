@@ -5,35 +5,61 @@ using Meshes
 using GLMakie
 using CUDA
 
-n = 1024
-
-@time edges, cells = SWEGPU.make_structured_mesh(n, n, Float32, Int64);
-#edges2, cells2 = SWEGPU.make_structured_mesh(2048, 2048, Float32, Int64);
-
-
-#n_refined = 200
-#edges_refined, cells_refined = SWEGPU.make_structured_mesh(n_refined, n_refined)
-
-#u0 = x -> [-0.125f0*(sign((x[1]-0.5f0)^2+ (x[2]-0.5f0)^2 -0.03f0) - 1.f0)+ 1.f0, 0.f0, 0.f0]
-u0 = x -> [-0.f0*(sign((x[1]-0.5f0)^2+ (x[2]-0.5f0)^2 -0.03f0) - 1.f0)+ 1.f0, 0.f0, 0.f0]
-#u0 = x -> [0.5f0 + 1f0*x[1], 0.f0, 0.f0]
+n = 100
+#n2 = 20
+#n3 = 40
 
 
-initial = hcat([u0(cell.centroid) for cell in cells]...)';
+top_func = x -> 0.0*x[1] #topography function
+edges, cells= SWEGPU.make_structured_mesh_with_topography(n, n, Float32, Int64, top_func);
 
-viz_height_initial = SWEGPU.visualize_height(initial, cells, edges)
-#viz(viz_height_initial)
+#edges2, cells2 = SWEGPU.make_structured_mesh(n2, n2, Float32, Int64);
+#edges3, cells3 = SWEGPU.make_structured_mesh(n3, n3, Float32, Int64);
+#viz_bottom = SWEGPU.visualize_cells(cells)
+#viz(viz_bottom, color=1:length(cells))
 
-#viz_recon = SWEGPU.visualize_reconstruction(res, edges, cells)
-#viz(viz_recon, color=1:length(cells))
 
-res = SWEGPU.SWE_solver(cells, edges, 0.1f0, initial; backend="cpu", bc=SWEGPU.neumannBC, reconstruction=1, return_runtime=true)
-CUDA.@profile res2 = SWEGPU.SWE_solver(cells, edges, 0.1f0, initial; backend="CUDA", bc=SWEGPU.neumannBC, reconstruction=1, return_runtime=true)
-N_list = [16, 32, 64, 128, 256, 512, 1024, 2048]
+#u0 = x -> [-0.25f0*(sign((x[1]-0.5f0)^2+ (x[2]-0.5f0)^2 -0.01f0) - 1.f0)+ 1.f0, 0.f0, 0.f0]
+#u0 = x -> [1.f0, 0.f0, 0.f0]
+u0 = x -> [0.5f0 + 0.2f0*exp((x[1]-0.5f0)^2+ (x[2]-0.5f0)^2), 0.f0, 0.f0]
 
+quad = SWEGPU.quadrature(u0, cells)
+quad_reconstructions = SWEGPU.make_reconstructions(cells, edges, quad)
+res_reconstructions = SWEGPU.make_reconstructions(cells, edges, res)
+
+sum(SWEGPU.L1_quadrature_recon(quad, res, quad_reconstructions, quad_reconstructions, cells))
+
+initial = hcat([u0(cell.centroid) - [cell.centroid[3], 0.f0, 0.f0] for cell in cells]...)';
+
+viz_quad = SWEGPU.visualize_height(quad, cells, edges)
+viz_initial = SWEGPU.visualize_height(initial, cells, edges)
+viz!(viz_initial)
+viz!(viz_quad, color=:red, alpha=0.5)
+
+viz_cells = SWEGPU.visualize_cells(cells)
+viz(viz_cells)
+
+
+
+
+res = SWEGPU.SWE_solver(cells, edges, 0.02f0, quad; backend="CUDA", bc=SWEGPU.neumannBC, reconstruction=1, return_runtime=false)
+
+viz_res = SWEGPU.visualize_height(res, cells, edges)
+viz(viz_res)
+viz_recon = SWEGPU.visualize_reconstruction(res, edges, cells)
+viz!(viz_recon)#, color=1:length(cells))
+
+recon = SWEGPU.make_reconstructions(cells, edges, res)
+
+ref2 = SWEGPU.refine_structured_grid(res, n, n2)
+ref2_recon = SWEGPU.refine_structured_grid(res, n, n2, recon)
+
+viz_ref2 = SWEGPU.visualize_height(ref2, cells2, edges2)
+viz_ref2_recon = SWEGPU.visualize_height(ref2_recon, cells2, edges2)
+viz!(viz_initial2, color=:green, alpha=0.8)
+viz!(viz_initial2_recon, color=:red, alpha=0.5)
+
+viz_diff = SWEGPU.visualize_height(ref2 .- ref2_recon, cells2, edges2)
+viz(viz_diff)
 viz_recon = SWEGPU.visualize_reconstruction(initial, edges, cells)
-viz(viz_recon, color=1:length(cells))
-@time n_list, diffs, f, baseline_n, ord_conv = SWEGPU.convergence_test(N_list, 0.2f0, u0, "Convergence test", backend="CUDA", bc=SWEGPU.wallBC, reconstruction=0)
-
-@time n_list2, diffs2, f2, baseline_n, ord_conv2 = SWEGPU.convergence_test(N_list, 0.2f0, u0, "Convergence test", backend="CUDA", bc=SWEGPU.wallBC, reconstruction=1)
-
+viz!(viz_recon, color=1:length(cells))

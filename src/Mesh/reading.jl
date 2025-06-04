@@ -1,16 +1,15 @@
-include("../read_obj.jl")
 include("../structs.jl")
 using ProgressMeter
 
-function read_obj(path)
-    vertices = []
-    faces = []
+function read_obj(path; spaceType=Float32, indType=Int64)
+    vertices = Vector{Vector{spaceType}}()
+    faces = Vector{Vector{indType}}()
 
     for line in eachline(path)
         if startswith(line, "v ")
-            push!(vertices, map(x -> parse(Float64, x), split(line[3:end])))
+            push!(vertices, map(x -> parse(spaceType, x), split(line[3:end])))
         elseif startswith(line, "f ")
-            push!(faces, map(x -> parse(Int, x), split(line[3:end])))
+            push!(faces, map(x -> parse(indType, x), split(line[3:end])))
         end
     end
     vertices = hcat(vertices...)

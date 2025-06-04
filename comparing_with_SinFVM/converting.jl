@@ -9,8 +9,8 @@ function cartesian_to_triangular(state)
     for j in 1:n_y
         for i in 1:n_x
             global_index = i + (j-1)*n_x
-            res[global_index*2-1, :] = state[i, j]
-            res[global_index*2, :] = state[i, j]
+            res[global_index*2-1, :] = state[i, j, :]
+            res[global_index*2, :] = state[i, j, :]
         end
     end
     return res

@@ -5,20 +5,21 @@ using StaticArrays
     i = @index(Global)
     spaceType = eltype(U)
     c = SVector(centroids[i, 1], centroids[i, 2])
-    u = SVector(U[i, 1], U[i, 2], U[i, 3])
+    # add the +c[3] to account for the bottom topography
+    u = SVector(U[i, 1] + centroids[i, 3], U[i, 2], U[i, 3])
     
     neighbours = find_neighbours(cell_edge_matrix, edge_cell_matrix, i)
     
     if neighbours[1] == 0 || neighbours[2] == 0 || neighbours[3] == 0
         # boundary edge
         for j in 1:3
-            recon_gradient[i, j, 1] = 0.0
-            recon_gradient[i, j, 2] = 0.0
+            recon_gradient[i, j, 1] = 0.f0
+            recon_gradient[i, j, 2] = 0.f0
         end
     else
-        u1 = SVector(U[neighbours[1], 1], U[neighbours[1], 2], U[neighbours[1], 3])
-        u2 = SVector(U[neighbours[2], 1], U[neighbours[2], 2], U[neighbours[2], 3])
-        u3 = SVector(U[neighbours[3], 1], U[neighbours[3], 2], U[neighbours[3], 3])
+        u1 = SVector(U[neighbours[1], 1] + centroids[neighbours[1], 3], U[neighbours[1], 2], U[neighbours[1], 3])
+        u2 = SVector(U[neighbours[2], 1] + centroids[neighbours[2], 3], U[neighbours[2], 2], U[neighbours[2], 3])
+        u3 = SVector(U[neighbours[3], 1] + centroids[neighbours[3], 3], U[neighbours[3], 2], U[neighbours[3], 3])
         c1 = SVector(centroids[neighbours[1], 1], centroids[neighbours[1], 2])
         c2 = SVector(centroids[neighbours[2], 1], centroids[neighbours[2], 2])
         c3 = SVector(centroids[neighbours[3], 1], centroids[neighbours[3], 2])

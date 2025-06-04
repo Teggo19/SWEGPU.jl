@@ -29,12 +29,14 @@ struct Cell{spaceType<:Real, indType<:Integer}
     points::Matrix{spaceType}
     area::spaceType
     diameter::spaceType
+    grad::Vector{spaceType} # Gradient of the cell
 
     function Cell(edges::Vector{indType}, pts::Matrix{spaceType}) where {spaceType<:Real, indType<:Integer}
         centroid = (pts[1:3, 1]+ pts[1:3, 2]+ pts[1:3, 3])/3
         area = convert(spaceType, 0.5*abs((pts[1, 1]-pts[1, 3])*(pts[2, 2]-pts[2, 1])-(pts[1, 1]-pts[1, 2])*(pts[2, 3]-pts[2, 1])))
         d = compute_diameter(pts, area)
-        new{spaceType, indType}(copy(edges), centroid, pts, area, d)
+        grad = compute_cell_gradient(pts)
+        new{spaceType, indType}(copy(edges), centroid, pts, area, d, grad)
     end
 end
 

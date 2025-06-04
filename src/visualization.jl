@@ -42,43 +42,7 @@ function visualize_cells(cells)
     return vis_cells
 end
 
-function visualize_height(U, cells, edges)
-    n_cells = length(cells)
-    
-    vis_heights = []
-
-    for i in 1:n_cells
-        cell = cells[i]
-        h = U[i, 1]
-        p1 = (cell.points[1, 1], cell.points[2, 1], h)
-        p2 = (cell.points[1, 2], cell.points[2, 2], h)
-        p3 = (cell.points[1, 3], cell.points[2, 3], h)
-        push!(vis_heights, Triangle(p1, p2, p3))
-    end
-
-    n_edges = length(edges)
-    for i in 1:n_edges
-        edge = edges[i]
-        if length(edge.cells) == 2
-            h2 = U[edge.cells[2]]
-        
-            h1 = U[edge.cells[1]]
-            
-            if h1 != h2
-                p1 = (edge.pt1[1], edge.pt1[2], h1)
-                p2 = (edge.pt2[1], edge.pt2[2], h1)
-                p3 = (edge.pt2[1], edge.pt2[2], h2)
-                p4 = (edge.pt1[1], edge.pt1[2], h2)
-                push!(vis_heights, Quadrangle(p1, p2, p3, p4))
-            end
-        end
-    end
-    
-
-    return vis_heights
-end
-
-function visualize_water(U, cells::Vector{Cell{Float64}})
+function visualize_water(U, cells)
     n_cells = length(cells)
 
     vis_water = []
@@ -147,7 +111,7 @@ function visualize_reconstruction(U, edges, cells; recon_type=1)
 
     for i in 1:n_cells
         cell = cells[i]
-        h = U[i, recon_type]
+        h = U[i, recon_type] + cell.centroid[3]
         c = cell.centroid
         h1 = h + recon_gradients[i, recon_type, 1]*(cell.points[1, 1]-c[1]) + recon_gradients[i, recon_type, 2]*(cell.points[2, 1]-c[2])
         h2 = h + recon_gradients[i, recon_type, 1]*(cell.points[1, 2]-c[1]) + recon_gradients[i, recon_type, 2]*(cell.points[2, 2]-c[2])
@@ -178,7 +142,7 @@ function make_reconstructions(cells, edges, initial)
     centroids = hcat([cell.centroid for cell in cells]...)'
 
 
-    edge_coordinates = make_edge_coordinates_array(edges)
+    edge_coordinates = make_edge_center_matrix(edges)
 
     # Holds information of what edges each cell is connected to
     cell_edge_matrix = make_cell_edge_matrix(cells)
@@ -212,4 +176,41 @@ function visualize_heatmap(U, cells; min_max = [0, 2])
 
     end
     return vis_list, colors
+end
+
+
+function visualize_height(U, cells, edges)
+    n_cells = length(cells)
+    
+    vis_heights = []
+
+    for i in 1:n_cells
+        cell = cells[i]
+        h = U[i, 1] + cell.centroid[3]
+        p1 = (cell.points[1, 1], cell.points[2, 1], h)
+        p2 = (cell.points[1, 2], cell.points[2, 2], h)
+        p3 = (cell.points[1, 3], cell.points[2, 3], h)
+        push!(vis_heights, Triangle(p1, p2, p3))
+    end
+
+    n_edges = length(edges)
+    for i in 1:n_edges
+        edge = edges[i]
+        if length(edge.cells) == 2
+            h2 = U[edge.cells[2]] + cells[edge.cells[2]].centroid[3]
+        
+            h1 = U[edge.cells[1]] + cells[edge.cells[1]].centroid[3]
+            
+            if h1 != h2
+                p1 = (edge.pt1[1], edge.pt1[2], h1)
+                p2 = (edge.pt2[1], edge.pt2[2], h1)
+                p3 = (edge.pt2[1], edge.pt2[2], h2)
+                p4 = (edge.pt1[1], edge.pt1[2], h2)
+                push!(vis_heights, Quadrangle(p1, p2, p3, p4))
+            end
+        end
+    end
+    
+
+    return vis_heights
 end

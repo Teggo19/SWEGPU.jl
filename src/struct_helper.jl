@@ -61,16 +61,36 @@ function compute_diameter(pts::Matrix{T}, area::T) where {T<:Real}
     return 2*area/s
 end
 
-function make_edge_coordinates_array(edges)
-    res = zeros(eltype(edges[1].pt1), length(edges), 2)
+function compute_cell_gradient(pts::Matrix{T}) where {T<:Real}
+    pt1 = pts[1:3, 1]
+    pt2 = pts[1:3, 2]
+    pt3 = pts[1:3, 3]
+    # Compute the gradient of the cell
+    grad = zeros(T, 2)
+    grad[1] = ((pt2[3] - pt1[3])*(pt3[2] - pt1[2]) - (pt3[3] - pt1[3])*(pt2[2] - pt1[2]))/((pt2[1] - pt1[1])*(pt3[2] - pt1[2]) - (pt3[1] - pt1[1])*(pt2[2] - pt1[2]))
+    grad[2] = ((pt2[3] - pt1[3])*(pt3[1] - pt1[1]) - (pt3[3] - pt1[3])*(pt2[1] - pt1[1]))/((pt2[2] - pt1[2])*(pt3[1] - pt1[1]) - (pt3[2] - pt1[2])*(pt2[1] - pt1[1]))
+    return grad
+end
+
+function make_edge_center_matrix(edges)
+    res = zeros(eltype(edges[1].pt1), length(edges), 3)
     for (i, edge) in enumerate(edges)
         res[i, 1] = 0.5*(edge.pt1[1] + edge.pt2[1])
         res[i, 2] = 0.5*(edge.pt1[2] + edge.pt2[2])
-        #res[i, 1, 2] = edge.pt1[2]
-        #res[i, 1, 3] = edge.pt1[3]
-        #res[i, 2, 1] = edge.pt2[1]
-        #res[i, 2, 2] = edge.pt2[2]
-        #res[i, 2, 3] = edge.pt2[3]
+        res[i, 3] = 0.5*(edge.pt1[3] + edge.pt2[3])
+    end
+    return res
+end
+
+function make_edge_coordinates_array(edges)
+    res = zeros(eltype(edges[1].pt1), length(edges), 2, 3)
+    for (i, edge) in enumerate(edges)
+        res[i, 1, 1] = edge.pt1[1]
+        res[i, 1, 2] = edge.pt1[2]
+        res[i, 1, 3] = edge.pt1[3]
+        res[i, 2, 1] = edge.pt2[1]
+        res[i, 2, 2] = edge.pt2[2]
+        res[i, 2, 3] = edge.pt2[3]
     end
     return res
 end
