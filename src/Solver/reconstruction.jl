@@ -1,7 +1,7 @@
 using KernelAbstractions
 using StaticArrays
 
-@kernel function update_reconstruction!(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates)
+@kernel     function update_reconstruction!(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, limiter)
     i = @index(Global)
     spaceType = eltype(U)
     c = SVector(centroids[i, 1], centroids[i, 2])
@@ -43,7 +43,7 @@ using StaticArrays
             du3 = vals[3] - val
             
             # Compute the gradient
-            grad12 = SVector((du1 * dy2 - du2 * dy1) / (dx1 * dy2 - dx2 * dy1), 
+            #=grad12 = SVector((du1 * dy2 - du2 * dy1) / (dx1 * dy2 - dx2 * dy1), 
                     (du1 * dx2 - du2 * dx1) / (dy1 * dx2 - dy2 * dx1))
             
             grad13 = SVector((du1 * dy3 - du3 * dy1) / (dx1 * dy3 - dx3 * dy1),
@@ -51,31 +51,59 @@ using StaticArrays
 
             grad23 = SVector((du2 * dy3 - du3 * dy2) / (dx2 * dy3 - dx3 * dy2),
                     (du2 * dx3 - du3 * dx2) / (dy2 * dx3 - dy3 * dx2))
+            if any(isnan, grad23)
+                #println("du2: $du2, du3: $du3, dy2: $dy2, dy3: $dy3, dx2: $dx2, dx3: $dx3")
+            end=#
             
-            grads = SMatrix{3, 2}((du1 * dy2 - du2 * dy1)/(dx1 * dy2 - dx2 * dy1), (du1 * dx2 - du2 * dx1) / (dy1 * dx2 - dy2 * dx1),
-                                  (du1 * dy3 - du3 * dy1)/(dx1 * dy3 - dx3 * dy1), (du1 * dx3 - du3 * dx1) / (dy1 * dx3 - dy3 * dx1),
-                                  (du2 * dy3 - du3 * dy2)/(dx2 * dy3 - dx3 * dy2), (du2 * dx3 - du3 * dx2) / (dy2 * dx3 - dy3 * dx2))
-            
-            abs_grads = SVector(sqrt(grads[1, 1]^2 + grads[1, 2]^2), sqrt(grads[2, 1]^2 + grads[2, 2]^2), sqrt(grads[2, 1]^2 + grads[2, 2]^2))
+            grads = SMatrix{3, 2}((du1 * dy2 - du2 * dy1) / (dx1 * dy2 - dx2 * dy1), (du1 * dy3 - du3 * dy1) / (dx1 * dy3 - dx3 * dy1), (du2 * dy3 - du3 * dy2) / (dx2 * dy3 - dx3 * dy2),
+                                  (du1 * dx2 - du2 * dx1) / (dy1 * dx2 - dy2 * dx1), (du1 * dx3 - du3 * dx1) / (dy1 * dx3 - dy3 * dx1), (du2 * dx3 - du3 * dx2) / (dy2 * dx3 - dy3 * dx2))
 
-            grad_ind = argmin(abs_grads)
+                                   
+                                   
+                                  
+            if limiter == 0
+                abs_grads = SVector(grads[1, 1]^2 + grads[1, 2]^2, grads[2, 1]^2 + grads[2, 2]^2, grads[3, 1]^2 + grads[3, 2]^2)
 
-            grad = grads[grad_ind, :]
-            grad_test = true
-            for k in 1:3
-                edge_coord = SVector(edge_coordinates[cell_edge_matrix[i, k], 1], edge_coordinates[cell_edge_matrix[i, k], 2])
-                edge_val = val + grad[1] * (edge_coord[1] - c[1]) + grad[2] * (edge_coord[2] - c[2])
-                if (edge_val > val && edge_val > vals[k]) || (edge_val < val && edge_val < vals[k])
-                    grad_test = false
-                    break
+                grad_ind = argmin(abs_grads)
+
+                grad = grads[grad_ind, :]
+                grad_test = true
+                for k in 1:3
+                    edge_coord = SVector(edge_coordinates[cell_edge_matrix[i, k], 1], edge_coordinates[cell_edge_matrix[i, k], 2])
+                    edge_val = val + grad[1] * (edge_coord[1] - c[1]) + grad[2] * (edge_coord[2] - c[2])
+                    if (edge_val > val && edge_val > vals[k]) || (edge_val < val && edge_val < vals[k])
+                        grad_test = false
+                        break
+                    end
                 end
+                if !grad_test
+                    grad = SVector(0.f0, 0.f0)
+                end
+            elseif limiter == 1
+                g1 = 0.f0
+                g2 = 0.f0
+                if (sign(grads[1, 1]) == sign(grads[2, 1]) && sign(grads[1, 1]) == sign(grads[3, 1]))
+                    if sign(grads[1, 1]) == 1
+                        g1 = minimum(grads[:, 1])
+                    else
+                        g1 = maximum(grads[:, 1])
+                    end
+                end
+                if (sign(grads[1, 2]) == sign(grads[2, 2]) && sign(grads[1, 2]) == sign(grads[3,2]))
+                    if sign(grads[1, 2]) == 1
+                        g2 = minimum(grads[:, 2])
+                    else
+                        g2 = maximum(grads[:, 2])
+                    end
+                end
+                grad = SVector(g1, g2)
             end
-            if !grad_test
-                grad = SVector(0.0, 0.0)
+                    
+            if any(isnan, grad)
+                grad = SVector(0.f0, 0.f0)
             end
             recon_gradient[i, j, 1] = grad[1]
             recon_gradient[i, j, 2] = grad[2]
-            
             
         end
         
