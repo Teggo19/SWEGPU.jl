@@ -118,7 +118,7 @@ function reorder_triangles!(vertices::Vector{Vertex}, triangles::Vector{Face})
 
     while triangles_drawn < n_triangles
         triangle = find_next_triangle!(triangles)
-        println("Drawing triangle $(triangle.old_id) with new id $(triangles_drawn + 1) and score $(triangle.score)")
+        #println("Drawing triangle $(triangle.old_id) with new id $(triangles_drawn + 1) and score $(triangle.score)")
         draw_triangle!(triangle, vertices, triangles_drawn + 1)
         
         update_cache!(triangle, vertex_cache, vertices, triangles)

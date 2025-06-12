@@ -42,6 +42,27 @@ function visualize_cells(cells)
     return vis_cells
 end
 
+
+
+function visualize_cells_2D(cells)
+    n_cells = length(cells)
+
+    vis_points = []
+    vis_cells = []
+
+    for i in 1:n_cells
+        cell = cells[i]
+        #push!(vis_points, Point(cell.centroid[1], cell.centroid[2], cell.centroid[3]))
+        p1 = (cell.points[1, 1], cell.points[2, 1])
+        p2 = (cell.points[1, 2], cell.points[2, 2])
+        p3 = (cell.points[1, 3], cell.points[2, 3])
+        push!(vis_cells, Triangle(p1, p2, p3))
+
+    end
+    
+    return vis_cells
+end
+
 function visualize_water(U, cells)
     n_cells = length(cells)
 
@@ -75,11 +96,11 @@ function radial_plot(results, cells)
     scatter(points)
 end
 
-function radial_plots(results, cells, names)
+function radial_plots(results, cells, names, title)
     f = Figure()
-    ax1 = Axis(f[1, 1], title="h")
-    ax2 = Axis(f[2, 1], title="hu")
-    ax3 = Axis(f[3, 1], title="hv")
+    ax1 = Axis(f[1, 1], title=title, xlabel = L"r", ylabel="h")
+    ax2 = Axis(f[2, 1], xlabel=L"r", ylabel=L"\sqrt{hu^2 + hv^2}")
+    #ax3 = Axis(f[3, 1], title="hv")
     
     center = (0.5, 0.5)
 
@@ -91,22 +112,22 @@ function radial_plots(results, cells, names)
     
     for i in 1:length(results)
         points = Point2f.(distances, results[i][:, 1])
-        scatter!(ax1, points, color=colors[i], label=names[i])
+        scatter!(ax1, points, color=colors[i], label=names[i], markersize = 4)
 
-        points = Point2f.(distances, results[i][:, 2])
-        scatter!(ax2, points, color=colors[i], label=names[i])
+        points = Point2f.(distances, sqrt.(results[i][:, 2].^2 .+ results[i][:, 3].^2))
+        scatter!(ax2, points, color=colors[i], label=names[i], markersize = 4)
 
-        points = Point2f.(distances, results[i][:, 3])
-        scatter!(ax3, points, color=colors[i], label=names[i])
+        #points = Point2f.(distances, results[i][:, 3])
+        #scatter!(ax3, points, color=colors[i], label=names[i])
 
     end
-    f[2, 2] = Legend(f, ax2, "Plots")
-    f 
+    f[1, 2] = Legend(f, ax2, "Plots")
+    return f
 end
 
-function visualize_reconstruction(U, edges, cells; recon_type=1)
+function visualize_reconstruction(U, edges, cells; recon_type=1, limiter=0)
     n_cells = length(cells)
-    recon_gradients = make_reconstructions(cells, edges, U)
+    recon_gradients = make_reconstructions(cells, edges, U; limiter=limiter)
     vis_recon = []
 
     for i in 1:n_cells
@@ -129,7 +150,7 @@ end
 
 
 include("Solver/reconstruction.jl")
-function make_reconstructions(cells, edges, initial)
+function make_reconstructions(cells, edges, initial; limiter=0)
     spaceType = eltype(cells[1].centroid)
 
     n_cells = length(cells)
@@ -152,7 +173,7 @@ function make_reconstructions(cells, edges, initial)
     
     dev = CPU()
 
-    update_reconstruction!(dev, 64)(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, ndrange=n_cells)
+    update_reconstruction!(dev, 64)(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, limiter, ndrange=n_cells)
     return recon_gradient
 end
 
@@ -192,7 +213,7 @@ function visualize_height(U, cells, edges)
         p3 = (cell.points[1, 3], cell.points[2, 3], h)
         push!(vis_heights, Triangle(p1, p2, p3))
     end
-
+    #=
     n_edges = length(edges)
     for i in 1:n_edges
         edge = edges[i]
@@ -209,7 +230,7 @@ function visualize_height(U, cells, edges)
                 push!(vis_heights, Quadrangle(p1, p2, p3, p4))
             end
         end
-    end
+    end=#
     
 
     return vis_heights

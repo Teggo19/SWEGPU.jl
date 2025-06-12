@@ -81,6 +81,7 @@ end
     diameter_2 = diameters[cell2]
     diameter = min(diameter_1, diameter_2)
 
+    
     # Update the max_dt_array according to the CFL condition
     if lambda != 0
         max_dt_array[i] = diameter/lambda
@@ -141,9 +142,9 @@ end
     #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
     
     a = dt/cell_areas[i]
-    val1 = U[i, 1]
-    val2 = U[i, 2]
-    val3 = U[i, 3]
+    val1 = 0.f0 # U[i, 1]
+    val2 = 0.f0 # U[i, 2]
+    val3 = 0.f0 # U[i, 3]
 
     h = U[i, 1]
     for j in 1:3
@@ -155,15 +156,13 @@ end
 
         h_edgeval = h + (recon_gradient[i, 1, 1]-cell_grads[i, 1]) * (edge_coordinates[edge, 1] - centroids[i, 1]) + (recon_gradient[i, 1, 2]-cell_grads[i, 2]) * (edge_coordinates[edge, 2] - centroids[i, 2])
 
-        b_diff = edge_coordinates[edge, 3] - centroids[i, 3]
-
         if edge_cell_matrix[edge, 1] == i
             #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
             
             val1 -= a*fluxes[edge, 1]
             val2 -= a*fluxes[edge, 2]
             val3 -= a*fluxes[edge, 3]
-            #println("Before adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3")
+            #println("Before adjustment (a): Cell $i: val1: $val1, val2: $val2, val3: $val3")
             val2 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
             val3 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
             
@@ -172,25 +171,26 @@ end
             val1 += a*fluxes[edge, 1]
             val2 += a*fluxes[edge, 2]
             val3 += a*fluxes[edge, 3]
-            #println("Before adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3")
+            #println("Before adjustment (b): Cell $i: val1: $val1, val2: $val2, val3: $val3")
             val2 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
             val3 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
         #= else
             println("Error: Mismanaged edge-cell matrixes") =#
         end
-        #println("After adjustment: Cell $i: val1: $val1, val2: $val2, val3: $val3 \n")
+
         #println("Cell $i, h: $h, edge: $edge, h_edgeval: $(h_edgeval), length: $l, recon_gradient: $(recon_gradient[i, :, :]), cell_grads: $(cell_grads[i, :]), edge_coord: $(edge_coordinates[edge, :] - centroids[i, :]) \n")
 
         # Balance terms from the topography gradient
         
     end
-    #TODO: Add the topography gradient of each cell in the centroid
+    #println("\n\n")
     
     val2 -= dt*9.81f0*recon_gradient[i, 1, 1]*h
     val3 -= dt*9.81f0*recon_gradient[i, 1, 2]*h
-    U[i, 1] = val1
-    U[i, 2] = val2
-    U[i, 3] = val3
+
+    U[i, 1] += val1
+    U[i, 2] += val2
+    U[i, 3] += val3
 end
 
 @kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, cell_grads)
@@ -212,7 +212,7 @@ end
     if (edge_cell_matrix[i, 2] == 0) 
         f1, f2_rot, f3_rot, lambda = bc(h1, hu1_rot, hv1_rot, F, compute_eigenvalues_F)
         cell2 = edge_cell_matrix[i, 1]
-        edge_coord2 = edge_coord
+        # edge_coord2 = edge_coord
     else
         cell2 = edge_cell_matrix[i, 2]
         edge_coord2 = SVector(edge_coordinates[i, 1] - centroids[cell2, 1], edge_coordinates[i, 2] - centroids[cell2, 2])
@@ -225,7 +225,14 @@ end
 
         f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
         
+        #=if abs(f1) > 1e-3
+            println("Flux for edge $i: f1: $f1, f2_rot: $f2_rot, f3_rot: $f3_rot, lambda: $lambda \n 
+                h1: $h1, hu1_rot: $hu1_rot, hv1_rot: $hv1_rot") 
+                
+        end=#
     end
+
+    
     
     f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
 
@@ -235,13 +242,13 @@ end
     fluxes[i, 3] = f3*edge_lengths[i]
     
     # Get the diameter for each of the cells
-    #diameter_1 = diameters[cell1]
-    diameter_1 = sqrt(edge_coord[1]^2 + edge_coord[2]^2)
+    diameter_1 = diameters[cell1]
+    #diameter_1 = sqrt(edge_coord[1]^2 + edge_coord[2]^2)
     # could add check if cell1=cell2
-    #diameter_2 = diameters[cell2]
-    diameter_2 = sqrt(edge_coord2[1]^2 + edge_coord2[2]^2)
+    diameter_2 = diameters[cell2]
+    #diameter_2 = sqrt(edge_coord2[1]^2 + edge_coord2[2]^2)
     diameter = min(diameter_1, diameter_2)
-
+    
     #TODO: Fix the CFL to the same as in the paper
     # Update the max_dt_array according to the CFL condition
     if lambda != 0
