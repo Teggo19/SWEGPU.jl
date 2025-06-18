@@ -84,7 +84,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
     end
     while t < T
         if reconstruction == 1
-            
+            #println("time: $t, T: $T \nU2: $(U2[:, 2]), U: $(U[:, 2])")
             update_reconstruction!(dev, blocksize)(U2, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, limiter, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
             
@@ -105,7 +105,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
             #update_values!(dev, blocksize)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, ndrange=n_cells)
             update_values_with_recon!(dev, blocksize)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, false, recon_gradient, normal_matrix, edge_lengths, edge_coordinates, centroids, cell_grads, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
-
+            #println("after update_values: U2: $(U2[:, 2]), U: $(U[:, 2])")
             update_reconstruction!(dev, blocksize)(U2, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, limiter, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
             
@@ -116,11 +116,14 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
             #update_values!(dev, blocksize)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, ndrange=n_cells)
             update_values_with_recon!(dev, blocksize)(U2, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, recon_gradient, normal_matrix, edge_lengths, edge_coordinates, centroids, cell_grads, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
+            #println("before avg: U2: $(U2[:, 2]), U: $(U[:, 2])")
 
             avg_kernel!(dev, blocksize)(U, U2, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
+            #println("after avg: U2: $(U2[:, 2]), U: $(U[:, 2])")
         # Loop over edges
         else
+            #println("time: $t, T: $T \nU: $(U[:, 2])")
             update_fluxes!(dev, blocksize)(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, ndrange=n_edges)
             KernelAbstractions.synchronize(dev)
 
@@ -137,6 +140,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, recon
             # Loop over cells
             update_values!(dev, blocksize)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, max_dt_array, true, ndrange=n_cells)
             KernelAbstractions.synchronize(dev)
+            #println("after update_values: U: $(U[:, 2])")
         end
         #update_values!(dev, 64)(U, fluxes, cell_edge_matrix, edge_cell_matrix, areas, dt, ndrange=n_cells)
 

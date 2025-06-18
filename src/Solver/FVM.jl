@@ -34,11 +34,13 @@ function central_upwind_flux_kurganov(h1, hu1, hv1, h2, hu2, hv2, flux, compute_
 end
 
 function rotate_u(hu, hv, n1, n2)
-    return hu*n1 - hv*n2, hu*n2 + hv*n1
+
+    return hu*n1 + hv*n2, -hu*n2 + hv*n1
 end
 
 function rotate_u_back(hu, hv, n1, n2)
-    return hu*n1 + hv*n2, -hu*n2+hv*n1
+
+    return hu*n1 - hv*n2, hu*n2 + hv*n1
 end
 
 @kernel function update_fluxes!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc)
@@ -157,21 +159,20 @@ end
         h_edgeval = h + (recon_gradient[i, 1, 1]-cell_grads[i, 1]) * (edge_coordinates[edge, 1] - centroids[i, 1]) + (recon_gradient[i, 1, 2]-cell_grads[i, 2]) * (edge_coordinates[edge, 2] - centroids[i, 2])
 
         if edge_cell_matrix[edge, 1] == i
-            #println("Updating cell $i with edge $edge. Value: $(fluxes[edge, :])")
-            
+
             val1 -= a*fluxes[edge, 1]
             val2 -= a*fluxes[edge, 2]
             val3 -= a*fluxes[edge, 3]
-            #println("Before adjustment (a): Cell $i: val1: $val1, val2: $val2, val3: $val3")
+
             val2 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
             val3 += a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
             
         elseif edge_cell_matrix[edge, 2] == i
-            
+
             val1 += a*fluxes[edge, 1]
             val2 += a*fluxes[edge, 2]
             val3 += a*fluxes[edge, 3]
-            #println("Before adjustment (b): Cell $i: val1: $val1, val2: $val2, val3: $val3")
+
             val2 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n1
             val3 -= a*0.5f0*9.81f0*l*((h_edgeval)^2)*n2
         #= else
@@ -225,13 +226,13 @@ end
 
         f1, f2_rot, f3_rot, lambda = central_upwind_flux_kurganov(h1, hu1_rot, hv1_rot, h2, hu2_rot, hv2_rot, F, compute_eigenvalues_F)
         
-        #=if abs(f1) > 1e-3
-            println("Flux for edge $i: f1: $f1, f2_rot: $f2_rot, f3_rot: $f3_rot, lambda: $lambda \n 
-                h1: $h1, hu1_rot: $hu1_rot, hv1_rot: $hv1_rot") 
-                
-        end=#
+        
     end
+    
 
+    #if cell1 == 9 || cell2 == 9
+    #    println("Cell1 = $cell1, Cell2 = $cell2, Edge $i: h1 = $h1, h2 = $h2 \nrecon1 = ($(recon_gradient[cell1, 1, 1]), $(recon_gradient[cell1, 1, 2])), recon2 = ($(recon_gradient[cell2, 1, 1]) $(recon_gradient[cell2, 1, 2])) \nedge_coord = $edge_coord, edge_coord2 = $edge_coord2 \n ")
+    #end
     
     
     f2, f3 = rotate_u_back(f2_rot, f3_rot, n1, n2)
