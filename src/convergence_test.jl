@@ -6,7 +6,7 @@ include("Mesh/reading.jl")
 include("Solver/SWE_solver.jl")
 include("Solver/bc.jl")
 
-function convergence_test(baseline, baseline_n, N_list, T, initial_function, title; backend="cpu", bc=neumannBC, reconstruction=0, CFL=0.3f0, altmesh=false, limiter=0)
+function convergence_test(baseline, baseline_n, N_list, T, initial_function, title; backend="cpu", bc=neumannBC, reconstruction=0, CFL=0.5f0, altmesh=false, limiter=0, quad_order=3, userecon=true, top_func=0, spaceType=Float32)
     # baseline is the baseline result to compare against
     # N_list is a list of grid sizes to test
     # T is the time to run the simulation for
@@ -15,18 +15,23 @@ function convergence_test(baseline, baseline_n, N_list, T, initial_function, tit
     diffs = zeros(length(N_list))
 
     for (i, n) in enumerate(N_list)
-        edges, cells = make_structured_mesh(n, n, Float32, Int64, alternative=altmesh)
+        if top_func==0
+            edges, cells = make_structured_mesh(n, n, spaceType, Int64, alternative=altmesh)
+        else
+            edges, cells = make_structured_mesh_with_topography(n, n, Float32, Int64, top_func)
+        end
         
         #initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
-        initial = quadrature(initial_function, cells)
+        initial = quadrature(initial_function, cells; order=quad_order)
 
         res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc, reconstruction=reconstruction, CFL=CFL, limiter=limiter)
-        #=if reconstruction == 1
-            recon = make_reconstructions(cells, edges, res)
+        if reconstruction == 1 && userecon
+            recon = make_reconstructions(cells, edges, res; limiter=limiter)
             res_refined, _ = refine_structured_grid(res, n, baseline_n, recon)
-        else=#
-        res_refined = refine_structured_grid(res, n, baseline_n; altmesh=altmesh)
-        #end
+        else
+            res_refined = refine_structured_grid(res, n, baseline_n; altmesh=altmesh)
+        end
+        
         diffs[i] = L1(res_refined, baseline)
     end
 
@@ -100,6 +105,10 @@ end
 
 function L1(res1, res2)
     return sum(abs.(res1 .- res2))/size(res1)[1]
+end
+
+function L1(res)
+    return sum(abs.(res))/size(res)[1]
 end
 
 function refine_structured_grid(result, n_old, n_new, reconstruction)
@@ -296,14 +305,18 @@ function compare_runtime(N_list, T, initial_function, title; recon=1, bc=neumann
 end
 
 
-function quadrature(f, cells)
+function quadrature(f, cells; order=3)
     T = eltype(cells[1].centroid)
     res = zeros(T, length(cells), 3)
     #coords = [[4/6, 1/6, 1/6], [1/6, 4/6, 1/6], [1/6, 1/6, 4/6]]
     #weights = [1/3, 1/3, 1/3]
-
-    coords = [[1/3, 1/3, 1/3], [0.2, 0.2, 0.6], [0.2, 0.6, 0.2], [0.6, 0.2, 0.2]]
-    weights = [-0.5625, 0.5208333333333333, 0.5208333333333333, 0.5208333333333333]
+    if order == 1
+        coords = [[1/3, 1/3, 1/3]]
+        weights = [1.0]
+    elseif order == 3
+        coords = [[1/3, 1/3, 1/3], [0.2, 0.2, 0.6], [0.2, 0.6, 0.2], [0.6, 0.2, 0.2]]
+        weights = [-0.5625, 0.5208333333333333, 0.5208333333333333, 0.5208333333333333]
+    end
     for (i, cell) in enumerate(cells)
         pt1 = cell.points[:, 1]
         pt2 = cell.points[:, 2]
@@ -311,10 +324,11 @@ function quadrature(f, cells)
         
         for (j, coord) in enumerate(coords)
             pt = pt1 .* coord[1] + pt2 .* coord[2] + pt3 .* coord[3]
-            res[i, :] += (weights[j] .* f(pt)) 
+            res[i, :] += (weights[j] .* f(pt))
         end
-        res[i, 1] -= cell.centroid[3]
+        #res[i, 1] -= cell.centroid[3]
     end
+    res[:, 2:3] = res[:, 2:3] .* res[:, 1]
     return res
 end
 
