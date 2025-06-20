@@ -144,9 +144,9 @@ end
     #edges = [cell_edge_matrix[i, 1], cell_edge_matrix[i, 2], cell_edge_matrix[i, 3]]
     
     a = dt/cell_areas[i]
-    val1 = 0.f0 # U[i, 1]
-    val2 = 0.f0 # U[i, 2]
-    val3 = 0.f0 # U[i, 3]
+    val1 = U[i, 1]
+    val2 = U[i, 2]
+    val3 = U[i, 3]
 
     h = U[i, 1]
     for j in 1:3
@@ -189,9 +189,9 @@ end
     val2 -= dt*9.81f0*recon_gradient[i, 1, 1]*h
     val3 -= dt*9.81f0*recon_gradient[i, 1, 2]*h
 
-    U[i, 1] += val1
-    U[i, 2] += val2
-    U[i, 3] += val3
+    U[i, 1] = val1
+    U[i, 2] = val2
+    U[i, 3] = val3
 end
 
 @kernel function update_fluxes_with_reconstruction!(fluxes, U, edge_cell_matrix, normal_matrix, edge_lengths, max_dt_array, diameters, bc, recon_gradient, edge_coordinates, centroids, cell_grads)

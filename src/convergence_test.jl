@@ -6,7 +6,7 @@ include("Mesh/reading.jl")
 include("Solver/SWE_solver.jl")
 include("Solver/bc.jl")
 
-function convergence_test(baseline, baseline_n, N_list, T, initial_function, title; backend="cpu", bc=neumannBC, reconstruction=0, CFL=0.5f0, altmesh=false, limiter=0, quad_order=3, userecon=true, top_func=0, spaceType=Float32)
+function convergence_test(baseline, baseline_n, N_list, T, initial_function, title; backend="cpu", bc=neumannBC, time_stepper=0, CFL=0.5f0, altmesh=false, limiter=0, quad_order=3, userecon=true, top_func=0, spaceType=Float32)
     # baseline is the baseline result to compare against
     # N_list is a list of grid sizes to test
     # T is the time to run the simulation for
@@ -24,8 +24,8 @@ function convergence_test(baseline, baseline_n, N_list, T, initial_function, tit
         #initial = hcat([initial_function(cell.centroid) for cell in cells]...)'
         initial = quadrature(initial_function, cells; order=quad_order)
 
-        res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc, reconstruction=reconstruction, CFL=CFL, limiter=limiter)
-        if reconstruction == 1 && userecon
+        res = SWE_solver(cells, edges, T, initial; backend=backend, bc=bc, time_stepper=time_stepper, CFL=CFL, limiter=limiter)
+        if userecon
             recon = make_reconstructions(cells, edges, res; limiter=limiter)
             res_refined, _ = refine_structured_grid(res, n, baseline_n, recon)
         else
@@ -104,7 +104,7 @@ end
 
 
 function L1(res1, res2)
-    return sum(abs.(res1 .- res2))/size(res1)[1]
+    return sum(abs.(res1 .- res2)./size(res1)[1])
 end
 
 function L1(res)
@@ -326,7 +326,7 @@ function quadrature(f, cells; order=3)
             pt = pt1 .* coord[1] + pt2 .* coord[2] + pt3 .* coord[3]
             res[i, :] += (weights[j] .* f(pt))
         end
-        #res[i, 1] -= cell.centroid[3]
+        res[i, 1] -= cell.centroid[3]
     end
     res[:, 2:3] = res[:, 2:3] .* res[:, 1]
     return res
