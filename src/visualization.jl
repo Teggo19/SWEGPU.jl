@@ -112,10 +112,10 @@ function radial_plots(results, cells, names, title)
     
     for i in 1:length(results)
         points = Point2f.(distances, results[i][:, 1])
-        scatter!(ax1, points, color=colors[i], label=names[i], markersize = 4)
+        scatter!(ax1, points, color=colors[i], label=names[i], markersize = 2)
 
         points = Point2f.(distances, sqrt.(results[i][:, 2].^2 .+ results[i][:, 3].^2))
-        scatter!(ax2, points, color=colors[i], label=names[i], markersize = 4)
+        scatter!(ax2, points, color=colors[i], label=names[i], markersize = 2)
 
         #points = Point2f.(distances, results[i][:, 3])
         #scatter!(ax3, points, color=colors[i], label=names[i])
