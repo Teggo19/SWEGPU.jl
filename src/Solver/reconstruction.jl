@@ -9,7 +9,13 @@ using StaticArrays
     u = SVector(U[i, 1] + centroids[i, 3], U[i, 2], U[i, 3])
     
     neighbours = find_neighbours(cell_edge_matrix, edge_cell_matrix, i)
-    
+    if neighbours[1] == 0 || neighbours[2] == 0 || neighbours[3] == 0
+        # If there are no neighbours, we cannot compute the gradient, so we set it to zero
+        for j in 1:3
+            recon_gradient[i, j, 1] = 0.f0
+            recon_gradient[i, j, 2] = 0.f0
+        end
+    else
     if neighbours[1] == 0
         # If the neighbour is 0, it means there is no neighbour in that direction, we need to construct a ghost cell with boundary conditions
         if bc == 0 # Neumann boundary condition
@@ -44,22 +50,23 @@ using StaticArrays
         u3 = SVector(U[neighbours[3], 1] + centroids[neighbours[3], 3], U[neighbours[3], 2], U[neighbours[3], 3])
         c3 = SVector(centroids[neighbours[3], 1], centroids[neighbours[3], 2])
     end
-        
     
+
     # Compute the gradients
+    dx1 = c1[1] - c[1]
+    dx2 = c2[1] - c[1]
+    dx3 = c3[1] - c[1]
+    
+    dy1 = c1[2] - c[2]
+    dy2 = c2[2] - c[2]
+    dy3 = c3[2] - c[2]
         
     for j in 1:3
         
         val = u[j]
         vals = SVector(u1[j], u2[j], u3[j])
         
-        dx1 = c1[1] - c[1]
-        dx2 = c2[1] - c[1]
-        dx3 = c3[1] - c[1]
         
-        dy1 = c1[2] - c[2]
-        dy2 = c2[2] - c[2]
-        dy3 = c3[2] - c[2]
         
         du1 = vals[1] - val
         du2 = vals[2] - val
@@ -96,11 +103,17 @@ using StaticArrays
                 edge_val = val + grad[1] * (edge_coord[1] - c[1]) + grad[2] * (edge_coord[2] - c[2])
                 if (edge_val > val && edge_val > vals[k]) || (edge_val < val && edge_val < vals[k])
                     grad_test = false
+                    if (i == 3 && j == 3)
+                        #println("Gradient test failed for cell $i, edge $k, grad = $grad, edge_val = $edge_val, val = $val, vals[$k] = $(vals[k]), edge_coord = $edge_coord")
+                    end
                     break
                 end
             end
             if !grad_test
                 grad = SVector(0.f0, 0.f0)
+            end
+            if  (i == 9 && j == 2) || (i == 3 && j == 3)
+                #println("Cell $i, grads = $(grads), val = $val, vals = $vals, grad = $grad, grad_test = $grad_test")
             end
 
         elseif limiter == 1
@@ -133,7 +146,11 @@ using StaticArrays
         recon_gradient[i, j, 2] = grad[2]
         
     end
-        
+    if i == 9 || i == 3
+        #println("Cell $i: \n c: $c, u: $u, u1: $u1, u2: $u2, u3: $u3, c1: $c1, c2: $c2, c3: $c3 \n gradients: $(recon_gradient[i, :, :]) \n")
+    end
+       
+end
     
     
 end

@@ -82,6 +82,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, time_
 
     if return_runtime
         start_time = time()
+        n_timesteps = 0
     end
     while t < T
         if time_stepper == 1
@@ -149,6 +150,10 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, time_
 
         #println("dt: $dt, t: $t")
         update!(p, Int64(ceil(t*3840)))
+
+        if return_runtime
+            n_timesteps += 1
+        end
     end
     finish!(p)
     if backend == "CUDA"
@@ -157,7 +162,7 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, time_
     if return_runtime
         runtime = time() - start_time
         println("Runtime: $runtime seconds")
-        return U, runtime
+        return U, runtime, n_timesteps
     end
     return U
 end

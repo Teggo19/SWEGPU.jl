@@ -281,7 +281,7 @@ function refine_structured_grid(result, n_old, n_new; altmesh=false)
 end
 
 # function to compare runtime of CPU and GPU
-function compare_runtime(N_list, T, initial_function, title; recon=1, bc=neumannBC)
+function compare_runtime(N_list, T, initial_function, title; time_stepper=1, bc=neumannBC)
     cpu_list = zeros(length(N_list))
     gpu_list = zeros(length(N_list))
 
@@ -290,8 +290,8 @@ function compare_runtime(N_list, T, initial_function, title; recon=1, bc=neumann
         
         initial = quadrature(initial_function, cells)
 
-        cpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CPU", bc=bc, reconstruction=recon, return_runtime=true)[2]
-        gpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CUDA", bc=bc, reconstruction=recon, return_runtime=true)[2]
+        cpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CPU", bc=bc, time_stepper=time_stepper, return_runtime=true)[2]
+        gpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CUDA", bc=bc, time_stepper=time_stepper, return_runtime=true)[2]
     end
     f = Figure()
     ax1 = Axis(f[1, 1], title=title, xlabel="N", ylabel="Runtime (s)", xscale=log10, yscale=log10)

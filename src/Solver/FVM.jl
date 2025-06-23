@@ -75,6 +75,7 @@ end
     fluxes[i, 1] = f1*edge_lengths[i]
     fluxes[i, 2] = f2*edge_lengths[i]
     fluxes[i, 3] = f3*edge_lengths[i]
+
     
     
     # Get the diameter for each of the cells
@@ -218,8 +219,8 @@ end
         cell2 = edge_cell_matrix[i, 2]
         edge_coord2 = SVector(edge_coordinates[i, 1] - centroids[cell2, 1], edge_coordinates[i, 2] - centroids[cell2, 2])
         h2 = U[cell2, 1] + (recon_gradient[cell2, 1, 1]-cell_grads[cell2, 1]) * edge_coord2[1] + (recon_gradient[cell2, 1, 2]-cell_grads[cell2, 2]) * edge_coord2[2]
-        hu2 = U[cell2, 2] + recon_gradient[cell2, 2, 1] * edge_coord[1] + recon_gradient[cell2, 2, 2] * edge_coord[2]
-        hv2 = U[cell2, 3] + recon_gradient[cell2, 3, 1] * edge_coord[1] + recon_gradient[cell2, 3, 2] * edge_coord[2]
+        hu2 = U[cell2, 2] + recon_gradient[cell2, 2, 1] * edge_coord2[1] + recon_gradient[cell2, 2, 2] * edge_coord2[2]
+        hv2 = U[cell2, 3] + recon_gradient[cell2, 3, 1] * edge_coord2[1] + recon_gradient[cell2, 3, 2] * edge_coord2[2]
 
         
         hu2_rot, hv2_rot = rotate_u(hu2, hv2, n1, n2)
@@ -241,6 +242,18 @@ end
     fluxes[i, 1] = f1*edge_lengths[i]
     fluxes[i, 2] = f2*edge_lengths[i]
     fluxes[i, 3] = f3*edge_lengths[i]
+
+
+    if i == 7 || i == 18
+        #=println("Cell1 = $cell1, h1 = $h1, hu1 = $hu1, hv1 = $hv1, U1 : $(U[cell1, :])\n
+        Cell2 = $cell2, h2 = $h2, hu2 = $hu2, hv2 = $hv2, U2 : $(U[cell2, :])\n
+        f1 = $f1, f2 = $f2, f3=$f3\n
+        edge_coord = $edge_coord, edge_coord2 = $edge_coord2 \n
+        recon1 = $(recon_gradient[cell1, 2, :])\n
+        recon2 = $(recon_gradient[cell2, 3, :])\n
+        n = ($n1, $n2) \n")=#
+    end
+    
     
     # Get the diameter for each of the cells
     diameter_1 = diameters[cell1]
