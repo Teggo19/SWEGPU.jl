@@ -19,7 +19,7 @@ u0 = x -> [-0.25f0*(sign((x[1]-0.5f0)^2+ (x[2]-0.5f0)^2 -0.01f0) - 1.f0)+ 1.f0, 
 
 n = 512
 
-edges, cells = SWEGPU.make_structured_mesh(n, n, Float32, Int64; alternative=true);
+edges, cells = SWEGPU.make_structured_mesh(n, n, Float32, Int64; alternative=false);
 
 #viz_cells = SWEGPU.visualize_cells(cells)
 #viz(viz_cells, showsegments=true)
@@ -29,19 +29,20 @@ initial = SWEGPU.quadrature(u0, cells);
 #viz_initial = SWEGPU.visualize_height(initial, cells, edges)
 #viz(viz_initial)
 
-res_norecon = SWEGPU.SWE_solver(cells, edges, T, initial; backend="cpu", bc=SWEGPU.neumannBC, reconstruction=0, return_runtime=false, CFL=0.5f0);
-res = SWEGPU.SWE_solver(cells, edges, T, initial; backend="CUDA", bc=SWEGPU.neumannBC, reconstruction=1, return_runtime=false, CFL=0.5f0);
-res2 = SWEGPU.SWE_solver(cells, edges, T, initial; backend="CUDA", bc=SWEGPU.neumannBC, reconstruction=1, return_runtime=false, CFL=0.5f0, limiter=1);
+res_norecon = SWEGPU.SWE_solver(cells, edges, T, initial; backend="cpu", bc=SWEGPU.neumannBC, time_stepper=0, return_runtime=false, CFL=0.5f0, limiter=2);
+res = SWEGPU.SWE_solver(cells, edges, T, initial; backend="CUDA", bc=SWEGPU.neumannBC, time_stepper=1, return_runtime=false, CFL=0.5f0);
+res2 = SWEGPU.SWE_solver(cells, edges, T, initial; backend="CUDA", bc=SWEGPU.neumannBC, time_stepper=1, return_runtime=false, CFL=0.5f0, limiter=1);
+res3 = SWEGPU.SWE_solver(cells, edges, T, initial; backend="CUDA", bc=SWEGPU.neumannBC, time_stepper=1, return_runtime=false, CFL=0.5f0, limiter=2);
 #viz_res = SWEGPU.visualize_height(res, cells, edges)
-#viz(viz_res)
+#viz(viz_res, showsegments=true)
 
 #SWEGPU.radial_plot(res, cells)
 
-SWEGPU.radial_plots([res2, res_norecon], cells, ["SWEGPU recon", "SWEGPU norecon"], "test")
+#SWEGPU.radial_plots([res, res_norecon], cells, ["SWEGPU recon", "SWEGPU norecon"], title="test")
 f = SWEGPU.radial_plots([res_norecon, baseline_norecon], cells, ["SWEGPU 1st order", "SinFVM 1st order"], "Radial plot comparison 1st order")
-SWEGPU.radial_plots([res, res_norecon, baseline], cells, ["SWEGPU recon", "SWEGPU norecon", "SinFVM recon"])
-f2 = SWEGPU.radial_plots([res, baseline], cells, ["SWEGPU 2nd order", "SinFVM 2nd order"], "Radial plot comparison 2nd order")
-SWEGPU.radial_plots([baseline_norecon, baseline], cells, ["SinFVM norecon", "SinFVM recon"])
+#SWEGPU.radial_plots([res, res_norecon, baseline], cells, ["SWEGPU recon", "SWEGPU norecon", "SinFVM recon"])
+f2 = SWEGPU.radial_plots([res2, baseline], cells, ["SWEGPU 2nd order", "SinFVM 2nd order"], "Radial plot comparison 2nd order")
+#SWEGPU.radial_plots([baseline_norecon, baseline], cells, ["SinFVM norecon", "SinFVM recon"])
 
-#save("circular_dam_break_radial_plot_comparison_1st_order.png", f)
-#save("circular_dam_break_radial_plot_comparison_2nd_order.png", f2)
+save("tmp/sinfvm_comp/circular_dam_break_radial_plot_comparison_1st_order.png", f)
+save("tmp/sinfvm_comp/circular_dam_break_radial_plot_comparison_2nd_order.png", f2)

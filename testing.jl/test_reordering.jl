@@ -4,7 +4,7 @@ using Meshes
 using GLMakie
 using BenchmarkTools
 
-file_path = "../Grids/terrain.obj"
+#=file_path = "../Grids/terrain.obj"
 vertices, fs = SWEGPU.read_obj(file_path)
 vertices[3, :] .= 0.0f0
 x_min = minimum(vertices[1, :])
@@ -17,15 +17,15 @@ x_range = x_max - x_min
 y_range = y_max - y_min
 range = min(x_range, y_range)
 vertices = vertices .- [x_min, y_min, z_min]
+=#
+#edges, cells = SWEGPU.generate_mesh(vertices, faces, Float32, Int64);
 
-edges, cells = SWEGPU.generate_mesh(vertices, faces, Float32, Int64);
+#viz_cells = SWEGPU.visualize_cells(cells)
+#viz(viz_cells, color=1:length(cells))
+#edges_cells = read_from_file("")
+#new_vertices, new_faces = SWEGPU.reorder_triangular_grid(vertices, faces)
 
-viz_cells = SWEGPU.visualize_cells(cells)
-viz(viz_cells, color=1:length(cells))
-
-new_vertices, new_faces = SWEGPU.reorder_triangular_grid(vertices, faces)
-
-new_edges, new_cells = SWEGPU.generate_mesh(new_vertices, new_faces, Float32, Int64)
+#new_edges, new_cells = SWEGPU.generate_mesh(new_vertices, new_faces, Float32, Int64)
 
 viz_new_cells = SWEGPU.visualize_cells(new_cells)
 viz(viz_new_cells, color=1:length(new_cells))
