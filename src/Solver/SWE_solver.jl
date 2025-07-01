@@ -26,13 +26,14 @@ function SWE_solver(cells, edges, T, initial; backend="CPU", bc=neumannBC, time_
     centroids = hcat([cell.centroid for cell in cells]...)'
     cell_grads = hcat([cell.grad for cell in cells]...)'
     areas = hcat([cell.area for cell in cells]...)'
-    diameters = hcat([cell.diameter for cell in cells]...)'
+    #diameters = hcat([cell.diameter for cell in cells]...)'
     edge_lengths = hcat([edge.length for edge in edges]...)'
     edge_coordinates = make_edge_center_matrix(edges)
 
     # Holds information of what edges each cell is connected to
     cell_edge_matrix = make_cell_edge_matrix(cells)
     
+    diameters = make_diameter_array(cells, edges)
 
     fluxes = zeros(spaceType, n_edges, 3)
     normal_matrix = make_normal_matrix(edges)

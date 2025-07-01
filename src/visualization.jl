@@ -97,8 +97,8 @@ function radial_plot(results, cells)
 end
 
 function radial_plots(results, cells, names, title)
-    f = Figure()
-    ax1 = Axis(f[1, 1], title=title, xlabel = L"r", ylabel="h")
+    f = Figure(size=(1200, 1200), fontsize=30)
+    ax1 = Axis(f[1, 1], xlabel = L"r", ylabel="h") #,title=title)
     ax2 = Axis(f[2, 1], xlabel=L"r", ylabel=L"\sqrt{hu^2 + hv^2}")
     #ax3 = Axis(f[3, 1], title="hv")
     
@@ -109,19 +109,23 @@ function radial_plots(results, cells, names, title)
     distances = [sqrt((cell_centre[1]-center[1])^2 + (cell_centre[2]-center[2])^2) for cell_centre in cell_centres]
 
     colors = [:red, :blue, :green, :purple, :orange]
-    
+    markers = [:circle, :circle, :circle]
     for i in 1:length(results)
         points = Point2f.(distances, results[i][:, 1])
-        scatter!(ax1, points, color=colors[i], label=names[i], markersize = 2)
+        scatter!(ax1, points, color=colors[i], label=names[i], markersize = 2, marker=markers[i])
 
         points = Point2f.(distances, sqrt.(results[i][:, 2].^2 .+ results[i][:, 3].^2))
-        scatter!(ax2, points, color=colors[i], label=names[i], markersize = 2)
 
+        scatter!(ax2, points, color=colors[i], label=names[i], markersize = 2, marker=markers[i])
         #points = Point2f.(distances, results[i][:, 3])
         #scatter!(ax3, points, color=colors[i], label=names[i])
 
     end
-    f[1, 2] = Legend(f, ax2, "Plots")
+    #f[1, 2] = Legend(f, ax2, "Plots")
+    elem1 = MarkerElement(color=colors[1], markersize=10, marker=:circle)
+    elem2 = MarkerElement(color=colors[2], markersize=10, marker=:circle)
+    axislegend(ax1, [elem1, elem2], [names[1], names[2]])
+    axislegend(ax2, [elem1, elem2], [names[1], names[2]])
     return f
 end
 

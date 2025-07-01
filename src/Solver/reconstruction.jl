@@ -4,6 +4,13 @@ using StaticArrays
 @kernel function update_reconstruction!(U, recon_gradient, centroids, cell_edge_matrix, edge_cell_matrix, edge_coordinates, limiter; bc=0)
     i = @index(Global)
     spaceType = eltype(U)
+    #=if limiter == 0
+        edge_coords = SMatrix{, 3, 2}(edge_coordinates[cell_edge_matrix[i, 1], 1], edge_coordinates[cell_edge_matrix[i, 2], 1], edge_coordinates[cell_edge_matrix[i, 3], 1],
+                                                edge_coordinates[cell_edge_matrix[i, 1], 2], edge_coordinates[cell_edge_matrix[i, 2], 2], edge_coordinates[cell_edge_matrix[i, 3], 2])
+        c = SVector(1/3*(edge_coords[1, 1] + edge_coords[2, 1] + edge_coords[3, 1]), 1/3*(edge_coords[1, 2] + edge_coords[2, 2] + edge_coords[3, 2]))
+    else
+        c = SVector(centroids[i, 1], centroids[i, 2])
+    end=#
     c = SVector(centroids[i, 1], centroids[i, 2])
     # add the +c[3] to account for the bottom topography
     u = SVector(U[i, 1] + centroids[i, 3], U[i, 2], U[i, 3])
@@ -99,6 +106,7 @@ using StaticArrays
             grad = grads[grad_ind, :]
             grad_test = true
             for k in 1:3
+                #edge_coord = SVector(edge_coords[k, 1], edge_coords[k, 2])
                 edge_coord = SVector(edge_coordinates[cell_edge_matrix[i, k], 1], edge_coordinates[cell_edge_matrix[i, k], 2])
                 edge_val = val + grad[1] * (edge_coord[1] - c[1]) + grad[2] * (edge_coord[2] - c[2])
                 if (edge_val > val && edge_val > vals[k]) || (edge_val < val && edge_val < vals[k])

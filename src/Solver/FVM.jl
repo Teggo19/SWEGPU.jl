@@ -150,6 +150,7 @@ end
     val3 = U[i, 3]
 
     h = U[i, 1]
+    
     for j in 1:3
         edge = cell_edge_matrix[i, j]
 
@@ -256,13 +257,13 @@ end
     
     
     # Get the diameter for each of the cells
-    diameter_1 = diameters[cell1]
+    #diameter_1 = diameters[cell1]
     #diameter_1 = sqrt(edge_coord[1]^2 + edge_coord[2]^2)
     # could add check if cell1=cell2
-    diameter_2 = diameters[cell2]
+    #diameter_2 = diameters[cell2]
     #diameter_2 = sqrt(edge_coord2[1]^2 + edge_coord2[2]^2)
-    diameter = min(diameter_1, diameter_2)
-    
+    #diameter = min(diameter_1, diameter_2)
+    diameter = diameters[i]
     #TODO: Fix the CFL to the same as in the paper
     # Update the max_dt_array according to the CFL condition
     if lambda != 0

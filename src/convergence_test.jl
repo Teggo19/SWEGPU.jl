@@ -43,7 +43,7 @@ function convergence_test(baseline, baseline_n, N_list, T, initial_function, tit
     # Plot the line of best fit
     x = range(minimum(N_list), stop=maximum(N_list), length=100)
     y = exp(order_of_convergence[0]) .* x .^ order_of_convergence[1]
-    lines!(ax1, x, y, color=:blue,linestyle=:dash, label="Best fit line: y = $(round(exp(order_of_convergence[0]), digits=2))N^$(round(order_of_convergence[1], digits=2))")
+    lines!(ax1, x, y, color=:blue,linestyle=:dash, label="Best fit line: y = $(round(exp(order_of_convergence[0]), digits=5))N^$(round(order_of_convergence[1], digits=2))")
     lines!(ax1, N_list, diffs, color=:red, label="L1 error")
     scatter!(ax1, N_list, diffs, color=:red, markersize=20)
     # Add the legend
@@ -281,17 +281,18 @@ function refine_structured_grid(result, n_old, n_new; altmesh=false)
 end
 
 # function to compare runtime of CPU and GPU
-function compare_runtime(N_list, T, initial_function, title; time_stepper=1, bc=neumannBC)
+function compare_runtime(N_list, T, initial_function, title; time_stepper=1, bc=neumannBC, spaceType=Float32, limiter=1)
     cpu_list = zeros(length(N_list))
     gpu_list = zeros(length(N_list))
+    n_timesteps = zeros(length(N_list))
 
     for (i, n) in enumerate(N_list)
-        edges, cells = make_structured_mesh(n, n, Float32, Int64)
+        edges, cells = make_structured_mesh(n, n, spaceType, Int64)
         
         initial = quadrature(initial_function, cells)
 
-        cpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CPU", bc=bc, time_stepper=time_stepper, return_runtime=true)[2]
-        gpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CUDA", bc=bc, time_stepper=time_stepper, return_runtime=true)[2]
+        cpu_list[i] = SWE_solver(cells, edges, T, initial; backend="CPU", bc=bc, time_stepper=time_stepper, return_runtime=true, limiter=1)[2]
+        _, gpu_list[i], n_timesteps[i] = SWE_solver(cells, edges, T, initial; backend="CUDA", bc=bc, time_stepper=time_stepper, return_runtime=true, limiter=1)
     end
     f = Figure()
     ax1 = Axis(f[1, 1], title=title, xlabel="N", ylabel="Runtime (s)", xscale=log10, yscale=log10)
@@ -301,7 +302,7 @@ function compare_runtime(N_list, T, initial_function, title; time_stepper=1, bc=
     scatter!(ax1, N_list, gpu_list, color=:red, markersize=10)
     # Add the legend
     f[1, 2] = Legend(f, ax1, "Plots")
-    return f, cpu_list, gpu_list
+    return f, cpu_list, gpu_list, n_timesteps
 end
 
 
@@ -316,6 +317,19 @@ function quadrature(f, cells; order=3)
     elseif order == 3
         coords = [[1/3, 1/3, 1/3], [0.2, 0.2, 0.6], [0.2, 0.6, 0.2], [0.6, 0.2, 0.2]]
         weights = [-0.5625, 0.5208333333333333, 0.5208333333333333, 0.5208333333333333]
+    elseif order == 4
+        coords = [[0.445948490915965, 0.445948490915965, 0.108103018168068], 
+                  [0.445948490915965, 0.108103018168068, 0.445948490915965], 
+                  [0.108103018168068, 0.445948490915965, 0.445948490915965], 
+                  [0.091576213509771, 0.091576213509771, 0.816847572980459], 
+                  [0.091576213509771, 0.816847572980459, 0.091576213509771], 
+                  [0.816847572980459, 0.091576213509771, 0.091576213509771]]
+        weights = [0.223381589678011, 
+                   0.223381589678011, 
+                   0.223381589678011, 
+                   0.109951743655322, 
+                   0.109951743655322, 
+                   0.109951743655322]
     end
     for (i, cell) in enumerate(cells)
         pt1 = cell.points[:, 1]
@@ -326,7 +340,7 @@ function quadrature(f, cells; order=3)
             pt = pt1 .* coord[1] + pt2 .* coord[2] + pt3 .* coord[3]
             res[i, :] += (weights[j] .* f(pt))
         end
-        res[i, 1] -= cell.centroid[3]
+        #res[i, 1] -= cell.centroid[3]
     end
     res[:, 2:3] = res[:, 2:3] .* res[:, 1]
     return res

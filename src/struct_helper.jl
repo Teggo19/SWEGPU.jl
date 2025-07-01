@@ -102,3 +102,17 @@ function make_cell_pts_array(cells)
     end
     return res
 end
+
+function make_diameter_array(cells, edges)
+    res = zeros(eltype(cells[1].diameter), length(edges))
+    for (i, edge) in enumerate(edges)
+        d1 = cells[edge.cells[1]].diameter
+        if length(edge.cells) == 2
+            d2 = cells[edge.cells[2]].diameter
+            res[i] = min(d1, d2)
+        else
+            res[i] = d1
+        end
+    end
+    return res
+end
